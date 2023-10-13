@@ -1,4 +1,4 @@
-## PGORM | Web server for PostgreSQL 
+## PGORM | JavaScript ORM for PostgreSQL
 
 ### [Download](https://pgorm.org/en/download/) ### 
 ### [Documentation](https://pgorm.org/en/documentation/) ### 
