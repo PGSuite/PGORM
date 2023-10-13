@@ -1,6 +1,8 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#define UTILS_MAX(a,b) (((a)>(b))?(a):(b))
+
 // file --------------------------------------------------------------------------------------------
 
 #ifdef _WIN32
@@ -160,7 +162,7 @@ typedef struct
 
 #define STR_COLLECTION_SIZE        30
 #define STR_COLLECTION_KEY_SIZE    50
-#define STR_COLLECTION_VALUE_SIZE 300
+#define STR_COLLECTION_VALUE_SIZE 200
 
 typedef struct
 {
@@ -175,7 +177,6 @@ typedef struct
 	int	 len;
 	char values[STR_COLLECTION_SIZE][STR_COLLECTION_VALUE_SIZE];
 } str_list;
-
 
 // pg ----------------------------------------------------------------------------------------------
 

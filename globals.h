@@ -10,7 +10,7 @@
 
 #else
 
-#define HTTP_DIRECTORY_DEFAULT "/etc/site"
+#define HTTP_DIRECTORY_DEFAULT "/site"
 #define LOG_FILE_DEFAULT       "/var/log/pgorm/pgorm.log"
 
 #endif

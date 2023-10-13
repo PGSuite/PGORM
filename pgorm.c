@@ -51,7 +51,7 @@ char HELP[] =
 	"  -h, --help          print this help\n"
 	"\n" \
 	"Examples:\n" \
-	"  pgorm start\n" \
+	"  pgorm execute\n" \
 	"  pgorm start -d sitedb -hd /mysite1 -l /tmp/pgorm.log\n";
 
 int main(int argc, char *argv[]) {
@@ -181,6 +181,8 @@ int main(int argc, char *argv[]) {
 	if (log_get_header(header, sizeof(header)) || globals_add_parameters(header, sizeof(header))) exit(2);
     log_info("%s", header);
 
+	// pgorm_test();
+
 	if (tcp_startup())
 		log_exit_fatal();
 
@@ -199,5 +201,3 @@ int main(int argc, char *argv[]) {
 	while(1) sleep(30*60);
 
 }
-
-

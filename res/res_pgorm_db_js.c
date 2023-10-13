@@ -48,28 +48,66 @@
     "\n" \ 
     "}\n" \ 
     "\n" \ 
+    "export class TableRelation {\n" \ 
+    "\n" \ 
+    "	#parentSchema;\n" \ 
+    "	#parentTableName;\n" \ 
+    "	#parentClassFunc;\n" \ 
+    "	#childSchema;\n" \ 
+    "	#childTableName;\n" \ 
+    "	#childClassFunc;\n" \ 
+    "	#childColumns;\n" \ 
+    "	#childColumnOrderPos;\n" \ 
+    "\n" \ 
+    "	constructor(parentSchema, parentTableName, parentClassFunc, childSchema, childTableName, childClassFunc, childColumns, childColumnOrderPos) {\n" \ 
+    "		this.#parentSchema        = parentSchema;\n" \ 
+    "		this.#parentTableName     = parentTableName;\n" \ 
+    "		this.#parentClassFunc     = parentClassFunc;\n" \ 
+    "		this.#childSchema         = childSchema;\n" \ 
+    "		this.#childTableName      = childTableName;\n" \ 
+    "		this.#childClassFunc      = childClassFunc;\n" \ 
+    "		this.#childColumns        = childColumns;\n" \ 
+    "		this.#childColumnOrderPos = childColumnOrderPos;\n" \ 
+    "\n" \ 
+    "	}\n" \ 
+    "\n" \ 
+    "	getParentSchema()        { return this.#parentSchema;        }\n" \ 
+    "	getParentTableName()     { return this.#parentTableName;     }\n" \ 
+    "	getParentClass()         { return this.#parentClassFunc();   }\n" \ 
+    "	getChildSchema()         { return this.#childSchema;         }\n" \ 
+    "	getChildTableName()      { return this.#childTableName;      }\n" \ 
+    "	getChildClass()          { return this.#childClassFunc();    }\n" \ 
+    "	getChildColumns()        { return this.#childColumns;        }\n" \ 
+    "	getChildColumnOrderPos() { return this.#childColumnOrderPos; }\n" \ 
+    "\n" \ 
+    "}\n" \ 
+    "\n" \ 
     "export class TableMetadata {\n" \ 
     "\n" \ 
     "	#schema;\n" \ 
     "	#tableName;\n" \ 
+    "	#tableComment;\n" \ 
     "	#columns;\n" \ 
     "	#columnsPrimaryKey;\n" \ 
     "	#columnNames;\n" \ 
     "	#columnNamesPrimaryKey;\n" \ 
     "	#tableRowClassFunc;\n" \ 
     "	#tableRowArrayClassFunc;\n" \ 
-    "	#tableComment;\n" \ 
+    "	#relationsParent;\n" \ 
+    "	#relationsChildFunc;\n" \ 
     "\n" \ 
-    "	constructor(schema, tableName, columns, columnsPrimaryKey, tableRowClassFunc, tableRowArrayClassFunc, tableComment) {\n" \ 
+    "	constructor(schema, tableName, tableComment, columns, columnsPrimaryKey, tableRowClassFunc, tableRowArrayClassFunc, relationsParent, relationsChildFunc) {\n" \ 
     "		this.#schema                 = schema;\n" \ 
     "		this.#tableName              = tableName;\n" \ 
+    "		this.#tableComment           = tableComment;\n" \ 
     "		this.#columns                = columns;\n" \ 
     "		this.#columnsPrimaryKey      = columnsPrimaryKey;\n" \ 
     "		this.#columnNames            = columns.map( property => property.getName() );\n" \ 
     "		this.#columnNamesPrimaryKey  = columnsPrimaryKey.map( property => property.getName() );\n" \ 
     "		this.#tableRowClassFunc      = tableRowClassFunc;\n" \ 
     "		this.#tableRowArrayClassFunc = tableRowArrayClassFunc;\n" \ 
-    "		this.#tableComment           = tableComment;\n" \ 
+    "		this.#relationsParent        = relationsParent;\n" \ 
+    "		this.#relationsChildFunc     = relationsChildFunc;\n" \ 
     "	}\n" \ 
     "\n" \ 
     "	getSchema()                { return this.#schema;                   }\n" \ 
@@ -81,6 +119,8 @@
     "	getColumnNamesPrimaryKey() { return this.#columnNamesPrimaryKey;    }\n" \ 
     "	getTableRowClass()         { return this.#tableRowClassFunc();      }\n" \ 
     "	getTableRowArrayClass()    { return this.#tableRowArrayClassFunc(); }\n" \ 
+    "	getRelationsParent()       { return this.#relationsParent;          }\n" \ 
+    "	getRelationsChild()        { return this.#relationsChildFunc();     }\n" \ 
     "\n" \ 
     "}\n" \ 
     "\n" \ 
@@ -155,6 +195,12 @@
     "\n" \ 
     "    _initialize(rowExists) { this.#rowExists = rowExists; return this; }\n" \ 
     "\n" \ 
+    "    toJSON() {\n" \
+    "        let json = {};\n" \ 
+    "        this.constructor.getTableMetadata().getColumns().forEach( column => { json[column.getFieldName()] = this.getFieldValue(column); });\n" \
+    "        return json;\n" \
+    "	}\n" \ 
+    "\n" \ 
     "}\n" \ 
     "\n" \ 
     "export class TableRowArray extends Array {\n" \ 
@@ -202,7 +248,6 @@
     "	}\n" \ 
     "\n" \ 
     "    execute(query, params) {\n" \ 
-    "		console.log(\"#id=\"+this.#id);\n" \ 
     "		return sendRequest(\"/pgorm/execute\", { \"connectionID\": this.#id, \"query\": query, \"params\": params });\n" \ 
     "	}\n" \ 
     "\n" \ 

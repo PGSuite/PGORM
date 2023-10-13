@@ -92,12 +92,10 @@ int tcp_recv_str(tcp_socket socket, char *str, int str_size) {
 			|| (recv_len<0 && tcp_errno==10060)
 		#endif
 		) {
-			log_error(33, TCP_TIMEOUT);
-			return -1;
+			return log_warn(901, TCP_TIMEOUT);
 		}
 		if (recv_len<0) {
-			log_error(45, tcp_errno);
-			return -1;
+			return log_warn(902, tcp_errno);
 		}
 		if (str_len+recv_len>str_size)
 			return log_error(5, str_size, str_len+recv_len);

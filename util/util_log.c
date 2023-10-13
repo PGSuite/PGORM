@@ -1,10 +1,12 @@
+#include "utils.h"
+
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
 #include <errno.h>
 #include <sys/time.h>
 
-#include "utils.h"
 #include "util_version.h"
 
 #define MSG_EXIT_FATAL "exit due to fatal error"
@@ -48,7 +50,7 @@ const char *ERRORS[] = {
 	"Cannot listen for incoming connections (errno %d)",                              // 30
 	"Cannot accept connection (errno %d)",                                            // 31
 	"Cannot set timeout (errno %d)",                                                  // 32
-	"No data to recieve from socket (timeout %d sec)",                                // 33
+	"Too many table relations (%d)",                                                  // 33
 	"Cannot send to socket (errno %d)",                                               // 34
 	"Cannot close socket (errno %d)",                                                 // 35
 	"Cannot create process (errno %d), command:\n%s",                                 // 36
@@ -60,7 +62,7 @@ const char *ERRORS[] = {
 	"Incorrect port number \"%s\"",                                                   // 42
 	"Cannot connect to %s:%d (errno %d)",                                             // 43
 	"Process not stopped (administration socket not closed)",                         // 44
-	"Error on recieved data from socket (errno %d)",                                  // 45
+	"<empty>", // Error on recieved data from socket (errno %d)",     // 45
 	"Too many (%d) program arguments",                                                // 46
 	"Cannot create process (errno %d), command:\n%s",                                 // 47
 	"Cannot initialize mutex \"%s\"",                                                 // 48
@@ -74,13 +76,13 @@ const char *ERRORS[] = {
 	"JSON is null (memory not allocated)",                                            // 56
 	"Cannot find JSON value (value type: %d, path: \"%s\", start text: \"%.20s\")",   // 57
 	LOG_ERROR_NOT_FOUND_CURRENT_THREAD_TEXT,                                          // 58
-	"Too many database сonnections (%d)",                                             // 59
-	"Invalid database сonnection id (\"%s\")",                                        // 60
-	"Cannot find database сonnection (id: \"%s\")",                                   // 61
-	"Database сonnection error: \n%s",                                                // 62
+	"Too many database �onnections (%d)",                                             // 59
+	"Invalid database �onnection id (\"%s\")",                                        // 60
+	"Cannot find database �onnection (id: \"%s\")",                                   // 61
+	"Database сonnection error: \n%s",                                               // 62
 	"JSON array index out of range (index: %d, array size: %d)",                      // 63
 	"JSON value type (%d) is not STRING",                                             // 64
-	"<empty>", //Too many SQL parameters (%d)",                                                   // 65
+	"<empty>", //Too many SQL parameters (%d)",     // 65
 	"SQL query returned empty data (query start: \"%.20s\")",                         // 66
 	"Invalid request path (\"%s\")",                                                  // 67
 	"Too many table columns (%d)",                                                    // 68
@@ -100,6 +102,13 @@ const char *ERRORS[] = {
 	"Cannot find attribute \"name\" of HTML tag \"pghtml-var\"",                      // 82
 	"Unsupported HTML tag \"%s\"",                                                    // 83
 	"Unrecognized error"                                                              //
+};
+
+const char *WARNINGS[] = {
+	"No warning",                                                                     // 900
+	"No data to recieve from socket (timeout %d sec)",                                // 901
+	"Error on recieved data from socket (errno %d)",                                  // 902
+	"Unrecognized warning"                                                            //
 };
 
 int          log_initialized = 0;
@@ -255,6 +264,44 @@ int log_error(int error_code, ...) {
 
    	return 1;
 }
+
+// result:
+//   -1 - always
+int log_warn(int warning_code, ...) {
+
+	int warnings_size = sizeof(WARNINGS)/sizeof(WARNINGS[0]);
+
+	if ((warning_code-900)<0 || (warning_code-900)>=warnings_size)
+		warning_code=900+warnings_size-1;
+
+	char warning_text[LOG_ERROR_TEXT_SIZE];
+
+	snprintf(warning_text, sizeof(warning_text), "%s%03d ", log_error_prefix, warning_code);
+	int prefix_len = strlen(warning_text);
+
+    va_list args;
+    va_start(args, &warning_code);
+	vsnprintf(warning_text+prefix_len, sizeof(warning_text)-prefix_len, WARNINGS[warning_code-900], args);
+    va_end(args);
+
+	if(!log_initialized) {
+		fprintf(stderr, "%s\n", warning_text);
+		return -1;
+	}
+
+	thread_mutex_lock(&log_mutex);
+	usleep(3*1000);
+
+	_log_println_str(LOG_LEVEL_WARN, warning_text);
+
+	usleep(3*1000);
+    thread_mutex_unlock(&log_mutex);
+
+   	// thread_set_last_erorr(warning_code, warning_text);
+
+   	return -1;
+}
+
 
 void log_set_file(char *value) {
 	if (!freopen(value, "a", stdout)) {

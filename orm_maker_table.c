@@ -17,16 +17,41 @@
 
 int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metadata_table *table) {
 	PGresult *pg_result;
-	char line1[32*1024],line2[32*1024];
+	char line1[32*1024],line2[32*1024],line3[32*1024];
 	int res;
 	if (stream_add_str(module_base_src, "// Module made automatically based on metadata and cannot be edited\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "import { TableRow,TableRowArray,TableColumn,TableMetadata,ORMConnection,ORMUtil,ORMError } from \"/orm/pgorm-db.js\"\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "import { ", table->class_name, ",", table->class_name, "Array } from \"/orm/", table->schema, "/", table->class_name, ".js\"\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "import { TableRow,TableRowArray,TableColumn,TableRelation,TableMetadata,ORMConnection,ORMUtil,ORMError } from \"/orm/pgorm-db.js\"\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "import { ", table->class_name, ", ", table->class_name, "Array } from \"/orm/", table->schema, "/", table->class_name, ".js\"\n\n", NULL)) return 1;
+	if (table->parents_len>0 || table->children_len>0) {
+		if (stream_add_str(module_base_src, "// Import relation classes\n", NULL)) return 1;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			if (strcmp(parent->parent_class_name,table->class_name)==0) continue;
+			int imported = 0;
+			for(int j=0; j<i; j++)
+				if (strcmp(table->parents[j].parent_class_name,parent->parent_class_name)==0) { imported=1; break; }
+			if (imported) continue;
+			if (stream_add_rpad(module_base_src, "import { ", parent->parent_class_name, table->relation_class_name_len_max, ","))  return 1;
+			if (stream_add_rpad(module_base_src, " ", parent->parent_class_name, table->relation_class_name_len_max, "Array"))  return 1;
+			if (stream_add_str(module_base_src, " } from \"/orm/", parent->parent_schema, "/", parent->parent_class_name, ".js\"\n", NULL)) return 1;
+		}
+		for(int i=0; i<table->children_len; i++) {
+			metadata_relation *child = &table->children[i];
+			if (strcmp(child->child_class_name,table->class_name)==0) continue;
+			int imported = 0;
+			for(int j=0; j<table->parents_len; j++)
+				if (strcmp(table->parents[j].parent_class_name,child->child_class_name)==0) { imported=1; break; }
+			for(int j=0; j<i; j++)
+				if (strcmp(table->children[j].child_class_name,child->child_class_name)==0) { imported=1; break; }
+			if (imported) continue;
+			if (stream_add_rpad(module_base_src, "import { ", child->child_class_name, table->relation_class_name_len_max, ","))  return 1;
+			if (stream_add_rpad(module_base_src, " ", child->child_class_name, table->relation_class_name_len_max, "Array"))  return 1;
+			if (stream_add_str(module_base_src, " } from \"/orm/", child->parent_schema, "/", child->child_class_name, ".js\"\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+	}
 	if (stream_add_str(module_base_src, "export class Base", table->class_name, " extends TableRow {\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // TableRow and TableRowList classes\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static getTableRowClass()      { return ", table->class_name, ";     }\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static getTableRowArrayClass() { return ", table->class_name, "Array; }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Table columns\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Columns\n", NULL)) return 1;
 	if (pg_select(&pg_result, pg_conn, 1, SQL_COLUMN_COMMENTS, 2, table->attnum_list, table->oid)) return 1;
 	int i;
 	for(i=0; i<table->columns_len; i++) {
@@ -60,21 +85,73 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 		if (stream_add_rpad(module_base_src, ".#column", table->columns[i].field_name, table->field_name_len_max, "; "))  return 1;
 		if (stream_add_str(module_base_src, "} \n", NULL)) return 1;
 	}
-	if (stream_add_str(module_base_src, "\n    // Table metadata\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static #tableMetadata = new TableMetadata(\"",table->schema,"\", \"",table->name,"\", [", NULL)) return 1;
+	line1[0] = 0; line2[0] = 0;
+	if (table->parents_len>0 || table->children_len>0) {
+		if (stream_add_str(module_base_src, "\n    // Relations\n", NULL)) return 1;
+		int line3_len_max = 0;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			line3[0] = 0;
+			for(int j=0; j<parent->child_fields.len; j++)
+				if (str_add(line3, sizeof(line3), j>0 ? "," : "", "Base", table->class_name, ".#column", parent->child_fields.values[j], NULL)) return 1;
+			str_len_max(&line3_len_max, line3);
+		}
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			line3[0] = 0;
+			for(int j=0; j<parent->child_fields.len; j++)
+				if (str_add(line3, sizeof(line3), j>0 ? "," : "", "Base", table->class_name, ".#column", parent->child_fields.values[j], NULL)) return 1;
+			if (stream_add_rpad(module_base_src, "    static #relationParent", parent->field_parent_name, table->parents_field_parent_name_len_max, ""))  return 1;
+			if (stream_add_rpad(module_base_src, " = new TableRelation(\"", parent->parent_schema, table->parents_parent_schema_len_max, "\","))  return 1;
+			if (stream_add_rpad(module_base_src, " \"", parent->parent_table_name, table->parents_parent_table_name_len_max, "\","))  return 1;
+			if (stream_add_rpad(module_base_src, " function() { return ", parent->parent_class_name, table->parents_parent_class_name_len_max, ";"))  return 1;
+			if (stream_add_str(module_base_src, " }, \"", table->schema, "\", \"", table->name, "\", function() { return ", table->class_name, "; }", NULL)) return 1;
+			if (stream_add_rpad(module_base_src, ", [", line3, line3_len_max, "], "))  return 1;
+			if (parent->child_field_sort_pos[0]==0) {
+				if (stream_add_rpad(module_base_src, "", "null", 20+4+strlen(table->class_name)+8, ""))  return 1;
+			} else {
+				if (stream_add_str(module_base_src, "Base", table->class_name, ".#column", NULL)) return 1;
+				if (stream_add_rpad(module_base_src, "", parent->child_field_sort_pos, 20, ""))  return 1;
+			}
+			if (stream_add_str(module_base_src, ");\n", NULL)) return 1;
+		}
+		if (table->parents_len>0)
+			if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			if (stream_add_rpad(module_base_src, "    static getRelationParent", parent->field_parent_name, table->parents_field_parent_name_len_max, "()"))  return 1;
+			if (stream_add_str(module_base_src, " { return Base", table->class_name, NULL)) return 1;
+			if (stream_add_rpad(module_base_src, ".#relationParent", parent->field_parent_name, table->parents_field_parent_name_len_max, ";"))  return 1;
+			if (stream_add_str(module_base_src, " }\n", NULL)) return 1;
+			if (str_add(line1, sizeof(line1), i>0 ? "," : "", "Base", table->class_name, ".#relationParent", parent->field_parent_name, NULL)) return 1;
+		}
+		if (table->parents_len>0 && table->children_len>0)
+			if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+		for(int i=0; i<table->children_len; i++) {
+			metadata_relation *child = &table->children[i];
+			if (stream_add_rpad(module_base_src, "    static getRelationChild", child->field_child_name, table->field_relation_name_len_max, "()"))  return 1;
+			if (stream_add_str(module_base_src, " { return ", child->child_class_name, NULL)) return 1;
+			if (stream_add_rpad(module_base_src, ".getRelationParent", child->field_parent_name, table->children_field_parent_name_len_max, "();"))  return 1;
+			if (stream_add_str(module_base_src, " }\n", NULL)) return 1;
+			if (str_add(line2, sizeof(line2), i>0 ? "," : "", "Base", table->class_name, ".getRelationChild", child->field_child_name, "()", NULL)) return 1;
+		}
+	}
+	if (stream_add_str(module_base_src, "\n    // Metadata\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static #tableMetadata = new TableMetadata(\"",table->schema,"\", \"",table->name,"\", ", NULL)) return 1;
+	if (pg_select(&pg_result, pg_conn, 1, SQL_TABLE_COMMENT, 1, table->oid)) return 1;
+	res = PQntuples(pg_result)>0 ? stream_add_str_escaped(module_base_src, PQgetvalue(pg_result, 0, 0)) : stream_add_str(module_base_src, "null", NULL);
+	PQclear(pg_result);
+	if (res) return 1;
+	if (stream_add_str(module_base_src, ", [", NULL)) return 1;
 	for(int i=0; i<table->columns_len; i++)
 		if (stream_add_str(module_base_src, i>0 ? "," : "", "Base", table->class_name, ".#column", table->columns[i].field_name, NULL)) return 1;
 	if (stream_add_str(module_base_src, "], [", NULL)) return 1;
 	for(int i=0; i<table->columns_pk_len; i++)
 		if (stream_add_str(module_base_src, i>0 ? "," : "", "Base", table->class_name, ".#column", table->columns[table->columns_pk[i]].field_name, NULL)) return 1;
-	if (stream_add_str(module_base_src, "], Base", table->class_name, ".getTableRowClass, Base", table->class_name, ".getTableRowArrayClass, ", NULL)) return 1;
-	if (pg_select(&pg_result, pg_conn, 1, SQL_TABLE_COMMENT, 1, table->oid)) return 1;
-	res = PQntuples(pg_result)>0 ? stream_add_str_escaped(module_base_src, PQgetvalue(pg_result, 0, 0)) : stream_add_str(module_base_src, "null", NULL);
-	PQclear(pg_result);
-	if (res) return 1;
-	if (stream_add_str(module_base_src, ");\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "], function() { return ", table->class_name, "; }, function() { return ", table->class_name, "Array; }, ", NULL)) return 1;
+	if (stream_add_str(module_base_src, "[", line1, "], function() { return [", line2, "]; });\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    static getTableMetadata() { return Base", table->class_name, ".#tableMetadata; }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Row fields and change marks\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Row fields\n", NULL)) return 1;
 	for(int i=0; i<table->columns_len; i++) {
 		if (stream_add_rpad(module_base_src, "    #", table->columns[i].field_name, table->field_name_len_max, ""))  return 1;
 		if (stream_add_rpad(module_base_src, " = null; #", table->columns[i].field_name, table->field_name_len_max, "$changed"))  return 1;
@@ -87,7 +164,15 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 		if (stream_add_rpad(module_base_src, "(value) { ORMUtil.", column->validate_value_func, table->validate_value_func_len_max, "")) return 1;
 		if (stream_add_rpad(module_base_src, "(value); this.#", column->field_name, table->field_name_len_max, "")) return 1;
 		if (stream_add_rpad(module_base_src, " = value; this.#", column->field_name, table->field_name_len_max, "$changed")) return 1;
-		if (stream_add_str(module_base_src, " = true; return this; }\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, " = true;", NULL)) return 1;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			for(int j=0; j<parent->child_fields.len; j++)
+				if (strcmp(column->field_name, parent->child_fields.values[j])==0) {
+					if (stream_add_str(module_base_src, " this.#", parent->field_parent_name, " = null;", " this.#", parent->field_parent_name, "$assigned = false;", NULL)) return 1;
+				}
+		}
+		if (stream_add_str(module_base_src, " return this; }\n", NULL)) return 1;
 	}
 	if (stream_add_str(module_base_src, "\n    // Get values\n", NULL)) return 1;
 	for(int i=0; i<table->columns_len; i++) {
@@ -95,6 +180,7 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 		if (stream_add_rpad(module_base_src, " { return this.#", table->columns[i].field_name, table->field_name_len_max, ";")) return 1;
 		if (stream_add_str(module_base_src, " } \n", NULL)) return 1;
 	}
+	/*
 	if (stream_add_str(module_base_src, "\n    // Get values for change\n", NULL)) return 1;
 	for(int i=0; i<table->columns_len; i++) {
 		if (stream_add_rpad(module_base_src, "    change", table->columns[i].field_name, table->field_name_len_max, "()")) return 1;
@@ -102,6 +188,7 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 		if (stream_add_rpad(module_base_src, " = true; return this.#", table->columns[i].field_name, table->field_name_len_max, ";")) return 1;
 		if (stream_add_str(module_base_src, " }\n", NULL)) return 1;
 	}
+	*/
 	if (stream_add_str(module_base_src, "\n    // Get change marks \n", NULL)) return 1;
 	for(int i=0; i<table->columns_len; i++) {
 		if (stream_add_rpad(module_base_src, "    isChanged", table->columns[i].field_name, table->field_name_len_max, "()"))  return 1;
@@ -109,6 +196,108 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 		if (stream_add_str(module_base_src, "} \n", NULL)) return 1;
 	}
 	if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+	if (table->parents_len>0) {
+		if (stream_add_str(module_base_src, "    // Parents\n", NULL)) return 1;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			if (stream_add_rpad(module_base_src, "    #", parent->field_parent_name, table->parents_field_parent_name_len_max, ""))  return 1;
+			if (stream_add_str(module_base_src, " = null;", NULL)) return 1;
+			if (stream_add_rpad(module_base_src, " #", parent->field_parent_name, table->parents_field_parent_name_len_max, "$assigned"))  return 1;
+			if (stream_add_str(module_base_src, " = false;\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n    // Get parents\n", NULL)) return 1;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			if (stream_add_str(module_base_src, "    get", parent->field_parent_name, "(connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
+			for(int j=0; j<parent->child_fields.len; j++)
+				if (stream_add_str(module_base_src, "        if (this.#", parent->child_fields.values[j], "===null) return null;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (this.#", parent->field_parent_name, "$assigned) return this.#", parent->field_parent_name, ";\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", parent->field_parent_name, " = ", parent->parent_class_name, ".load(", NULL)) return 1;
+			for(int j=0; j<parent->child_fields.len; j++)
+				if (stream_add_str(module_base_src, j>0 ? ", " : "", "this.#", parent->child_fields.values[j], NULL)) return 1;
+			if (stream_add_str(module_base_src, ", connection);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", parent->field_parent_name, "$assigned = true;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        return this.#", parent->field_parent_name, ";\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n    // Set parents\n", NULL)) return 1;
+		for(int i=0; i<table->parents_len; i++) {
+			metadata_relation *parent = &table->parents[i];
+			if (stream_add_str(module_base_src, "    set", parent->field_parent_name, "(value) {\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (!(value instanceof ", parent->parent_class_name, ")) throw new ORMError(303, `Value ${ORMUtil._valueToStringShort(value)} is not ", parent->parent_class_name, "`);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (value!==null && !value.isRowExists()) throw new ORMError(302, `Object \"", parent->parent_class_name, "\" not saved in database`);\n", NULL)) return 1;
+			for(int j=0; j<parent->child_fields.len; j++) {
+				if (stream_add_str(module_base_src, "        this.set", parent->child_fields.values[j], "(value!==null ? ", NULL)) return 1;
+			    if (stream_add_str(module_base_src, "value.get", parent->parent_fields.values[j], "() : null);\n", NULL)) return 1;
+			}
+			if (stream_add_str(module_base_src, "        this.#", parent->field_parent_name, " = value;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", parent->field_parent_name, "$assigned = true;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        return this;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+	}
+	if (table->children_len>0) {
+		if (stream_add_str(module_base_src, "    // Children\n", NULL)) return 1;
+		for(int i=0; i<table->children_len; i++) {
+			metadata_relation *child = &table->children[i];
+			if (stream_add_rpad(module_base_src, "    #", child->field_child_name, table->children_field_child_name_len_max, "Array"))  return 1;
+			if (stream_add_str(module_base_src, " = null;", NULL)) return 1;
+			if (stream_add_rpad(module_base_src, " #", child->field_child_name, table->children_field_child_name_len_max, "Array$assigned"))  return 1;
+			if (stream_add_str(module_base_src, " = false;\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n    // Get children\n", NULL)) return 1;
+		for(int i=0; i<table->children_len; i++) {
+			metadata_relation *child = &table->children[i];
+			if (stream_add_str(module_base_src, "    get", child->field_child_name, "Array(connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (!this.isRowExists()) throw new ORMError(302, \"Object not saved in database\");\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (this.#", child->field_child_name, "Array$assigned) return this.#", child->field_child_name, "Array;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array = ", child->child_class_name, "Array.load(\"", NULL)) return 1;
+			for(int j=0; j<child->child_columns.len; j++) {
+				if (stream_add_str(module_base_src, j==0 ? "" : " and ", child->child_columns.values[j], "=$", NULL)) return 1;
+			    if (stream_add_int(module_base_src, j+1)) return 1;
+			}
+			if (stream_add_str(module_base_src, "\", [", NULL)) return 1;
+			for(int j=0; j<child->parent_fields.len; j++) {
+				if (stream_add_str(module_base_src, j==0 ? "" : ",", "this.#", child->parent_fields.values[j], NULL)) return 1;
+			}
+			if (stream_add_str(module_base_src, "], connection)", NULL)) return 1;
+			if (child->child_field_sort_pos[0]!=0)
+				if (stream_add_str(module_base_src, ".sortBy", child->child_field_sort_pos, "()", NULL)) return 1;
+			if (stream_add_str(module_base_src, ";\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array$assigned = true;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        return this.#", child->field_child_name, "Array;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n    // Add children\n", NULL)) return 1;
+		for(int i=0; i<table->children_len; i++) {
+			metadata_relation *child = &table->children[i];
+			if (stream_add_str(module_base_src, "    add", child->field_child_name, "(child, connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (child===null) throw new ORMError(309, \"Child is null\");\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (!(child instanceof ", child->child_class_name, ")) throw new ORMError(303, `Value ${ORMUtil._valueToStringShort(value)} is not ", child->child_class_name, "`);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.get", child->field_child_name, "Array(connection);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (!child.isRowExists()) {\n", NULL)) return 1;
+			for(int j=0; j<child->child_columns.len; j++)
+				if (stream_add_str(module_base_src, "            if (!child.isChanged", child->child_fields.values[j], "()) child.set", child->child_fields.values[j], "(this.#", child->parent_fields.values[j], ");\n", NULL)) return 1;
+			if (child->child_field_sort_pos[0]!=0)
+				if (stream_add_str(module_base_src, "            if (!child.isChanged", child->child_field_sort_pos, "()) child.set", child->child_field_sort_pos, "(this.#", child->field_child_name, "Array.length>0 ? this.#", child->field_child_name, "Array[this.#", child->field_child_name, "Array.length-1].get", child->child_field_sort_pos, "()+1 : 1);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "            child.save(connection);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        }\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array.push(child);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        return this;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n    // Delete children\n", NULL)) return 1;
+		for(int i=0; i<table->children_len; i++) {
+			metadata_relation *child = &table->children[i];
+			if (stream_add_str(module_base_src, "    delete", child->field_child_name, "(index, connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.get", child->field_child_name, "Array(connection)[index].delete(connection);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array.splice(index, 1);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        return this;\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+	}
 	if (stream_add_str(module_base_src, "    // Save row and get values (SQL statement: insert or update with returning)\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    save(connection = ORMConnection.getDefault()) { return super.save(connection); }\n\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    // Delete row and get values (SQL statement: delete with returning)\n", NULL)) return 1;
@@ -146,6 +335,13 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 		if (stream_add_rpad(module_base_src, "this.#", table->columns[i].field_name, table->field_name_len_max, "$changed")) return 1;
 		if (stream_add_str(module_base_src, " = false;\n", NULL)) return 1;
 	}
+	for(int i=0; i<table->parents_len; i++) {
+		metadata_relation *parent = &table->parents[i];
+		if (stream_add_rpad(module_base_src, "        this.#", parent->field_parent_name, table->parents_field_parent_name_len_max, ""))  return 1;
+		if (stream_add_str(module_base_src, " = null;", NULL)) return 1;
+		if (stream_add_rpad(module_base_src, " this.#", parent->field_parent_name, table->parents_field_parent_name_len_max, "$assigned"))  return 1;
+		if (stream_add_str(module_base_src, " = false;\n", NULL)) return 1;
+	}
 	if (stream_add_str(module_base_src, "        return super._initialize(rowExists);\n    }\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "\n}\n\n", NULL)) return 1;
 	//
@@ -166,7 +362,7 @@ int orm_maker_table_module_base(PGconn *pg_conn, stream *module_base_src, metada
 			if (str_add(line2, sizeof(line2), j>0 ? " and " : "", table->columns[table->indexes[i].columns[j]].name, "=", variable, NULL)) return 1;
 		}
 		if (stream_add_str(module_base_src, "    // Load rows by index \"",table->indexes[i].name,"\"\n", NULL)) return 1;
-		if (stream_add_str(module_base_src, "    static loadByIndex",table->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", table->class_name, "List.load(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    static loadByIndex",table->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", table->class_name, "Array.load(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
 	}
 	if (table->sort_field_name_len_max!=-1) {
 		if (stream_add_str(module_base_src, "    // Sort by fields\n", NULL)) return 1;
