@@ -30,8 +30,10 @@ int str_substr(char *dest, int dest_size, char *source, int pos_begin, int pos_e
 }
 
 int str_copy(char *dest, int dest_size, char *source) {
+	if(dest==NULL) return log_error(45, "dest", "str_copy");
+	if(source==NULL) return log_error(45, "source", "str_copy");
 	int source_len = strlen(source);
-	if ( source_len>=dest_size )
+	if (source_len>=dest_size)
 		return log_error(5, dest_size, source_len+1);
 	for(int i=0; i<=source_len; i++) {
 		dest[i] = source[i];

@@ -121,10 +121,11 @@ int req_pgorm_execute(json *req_params, stream *response) {
 	return res;
 }
 
-extern req_pgorm_table_row_save();
-extern req_pgorm_table_row_delete();
-extern req_pgorm_table_row_load_by_condition();
-extern req_pgorm_table_row_array_load();
+extern req_pgorm_row_save();
+extern req_pgorm_row_delete();
+extern req_pgorm_row_load_where();
+extern req_pgorm_row_array_load();
+extern req_pgorm_row_array_delete();
 
 int req_pgorm(tcp_socket socket_connection, http_request *request) {
 
@@ -137,13 +138,14 @@ int req_pgorm(tcp_socket socket_connection, http_request *request) {
 	}
 
 	int (*req_pgorm_handler)(json *req_params, stream *response);
-	if      (!strcmp(request->path, "/pgorm/connect"))                     req_pgorm_handler = req_pgorm_connect;
-	else if (!strcmp(request->path, "/pgorm/disconnect"))                  req_pgorm_handler = req_pgorm_disconnect;
-	else if (!strcmp(request->path, "/pgorm/execute"))                     req_pgorm_handler = req_pgorm_execute;
-	else if (!strcmp(request->path, "/pgorm/table-row-save"))              req_pgorm_handler = req_pgorm_table_row_save;
-	else if (!strcmp(request->path, "/pgorm/table-row-delete"))            req_pgorm_handler = req_pgorm_table_row_delete;
-	else if (!strcmp(request->path, "/pgorm/table-row-load-by-condition")) req_pgorm_handler = req_pgorm_table_row_load_by_condition;
-	else if (!strcmp(request->path, "/pgorm/table-row-array-load"))        req_pgorm_handler = req_pgorm_table_row_array_load;
+	if      (!strcmp(request->path, "/pgorm/connect"))          req_pgorm_handler = req_pgorm_connect;
+	else if (!strcmp(request->path, "/pgorm/disconnect"))       req_pgorm_handler = req_pgorm_disconnect;
+	else if (!strcmp(request->path, "/pgorm/execute"))          req_pgorm_handler = req_pgorm_execute;
+	else if (!strcmp(request->path, "/pgorm/row-save"))         req_pgorm_handler = req_pgorm_row_save;
+	else if (!strcmp(request->path, "/pgorm/row-delete"))       req_pgorm_handler = req_pgorm_row_delete;
+	else if (!strcmp(request->path, "/pgorm/row-load-where"))   req_pgorm_handler = req_pgorm_row_load_where;
+	else if (!strcmp(request->path, "/pgorm/row-array-load"))   req_pgorm_handler = req_pgorm_row_array_load;
+	else if (!strcmp(request->path, "/pgorm/row-array-delete")) req_pgorm_handler = req_pgorm_row_array_delete;
 	else {
 		log_error(67, request->path);
 		return req_pgorm_send_last_error(socket_connection);

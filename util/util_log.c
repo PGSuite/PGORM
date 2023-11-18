@@ -62,7 +62,7 @@ const char *ERRORS[] = {
 	"Incorrect port number \"%s\"",                                                   // 42
 	"Cannot connect to %s:%d (errno %d)",                                             // 43
 	"Process not stopped (administration socket not closed)",                         // 44
-	"<empty>", // Error on recieved data from socket (errno %d)",     // 45
+	"Parameter \"%s\" is null (%s)",                                                  // 45
 	"Too many (%d) program arguments",                                                // 46
 	"Cannot create process (errno %d), command:\n%s",                                 // 47
 	"Cannot initialize mutex \"%s\"",                                                 // 48
@@ -79,7 +79,7 @@ const char *ERRORS[] = {
 	"Too many database �onnections (%d)",                                             // 59
 	"Invalid database �onnection id (\"%s\")",                                        // 60
 	"Cannot find database �onnection (id: \"%s\")",                                   // 61
-	"Database сonnection error: \n%s",                                               // 62
+	"Database сonnection error: \n%s",                                                // 62
 	"JSON array index out of range (index: %d, array size: %d)",                      // 63
 	"JSON value type (%d) is not STRING",                                             // 64
 	"<empty>", //Too many SQL parameters (%d)",     // 65

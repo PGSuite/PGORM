@@ -1,7 +1,52 @@
 #include "util/utils.h"
 
 #define DATA \
-    "export class TableColumn {\n" \ 
+    "export class Relation {\n" \
+    "\n" \
+    "	#schema;\n" \
+    "	#name;\n" \
+    "	#type;\n" \
+    "	#comment;\n" \
+    "	#columns;\n" \
+    "	#columnsPrimaryKey;\n" \
+    "	#columnNames;\n" \
+    "	#columnNamesPrimaryKey;\n" \
+    "	#rowClassFunc;\n" \
+    "	#rowArrayClassFunc;\n" \
+    "	#relationshipsParent;\n" \
+    "	#relationshipsChildFunc;\n" \
+    "\n" \
+    "	constructor(schema, name, type, comment, columns, columnsPrimaryKey, rowClassFunc, rowArrayClassFunc, relationshipsParent, relationshipsChildFunc) {\n" \
+    "		this.#schema                 = schema;\n" \
+    "		this.#name                   = name;\n" \
+    "		this.#type                   = type;\n" \
+    "		this.#comment                = comment;\n" \
+    "		this.#columns                = columns;\n" \
+    "		this.#columnsPrimaryKey      = columnsPrimaryKey;\n" \
+    "		this.#columnNames            = columns.map( property => property.getName() );\n" \
+    "		this.#columnNamesPrimaryKey  = columnsPrimaryKey.map( property => property.getName() );\n" \
+    "		this.#rowClassFunc           = rowClassFunc;\n" \
+    "		this.#rowArrayClassFunc      = rowArrayClassFunc;\n" \
+    "		this.#relationshipsParent    = relationshipsParent;\n" \
+    "		this.#relationshipsChildFunc = relationshipsChildFunc;\n" \
+    "	}\n" \
+    "\n" \
+    "	getSchema()                { return this.#schema;                   }\n" \
+    "	getName()                  { return this.#name;                     }\n" \
+    "	getType()                  { return this.#type;                     }\n" \
+    "	getComment()               { return this.#comment;                  }\n" \
+    "	getColumns()               { return this.#columns;                  }\n" \
+    "	getColumnsPrimaryKey()     { return this.#columnsPrimaryKey;        }\n" \
+    "	getColumnNames()           { return this.#columnNames;              }\n" \
+    "	getColumnNamesPrimaryKey() { return this.#columnNamesPrimaryKey;    }\n" \
+    "	getRowClass()              { return this.#rowClassFunc();           }\n" \
+    "	getRowArrayClass()         { return this.#rowArrayClassFunc();      }\n" \
+    "	getRelationshipsParent()   { return this.#relationshipsParent;      }\n" \
+    "	getRelationshipsChild()    { return this.#relationshipsChildFunc(); }\n" \
+    "\n" \
+    "}\n" \
+    "\n" \
+    "export class Column {\n" \
     "\n" \ 
     "	#name;\n" \ 
     "	#type;\n" \ 
@@ -10,13 +55,13 @@
     "	#typePrimitive;\n" \ 
     "	#typeObject;\n" \ 
     "	#notNull;\n" \ 
-    "	#tableRowClassFunc;\n" \ 
+    "	#rowClassFunc;\n" \
     "	#validateValueFunc;\n" \ 
     "	#jsValueFunc;\n" \ 
     "	#pgValueFunc;\n" \ 
     "	#comment;\n" \ 
     "\n" \ 
-    "	constructor(name, type, typeArray, fieldName, typePrimitive, typeObject, notNull, tableRowClassFunc, validateValueFunc, jsValueFunc, pgValueFunc, comment) {\n" \ 
+    "	constructor(name, type, typeArray, fieldName, typePrimitive, typeObject, notNull, rowClassFunc, validateValueFunc, jsValueFunc, pgValueFunc, comment) {\n" \
     "		this.#name              = name;\n" \ 
     "		this.#type              = type;\n" \ 
     "		this.#typeArray         = typeArray;\n" \ 
@@ -24,22 +69,22 @@
     "		this.#typePrimitive     = typePrimitive;\n" \ 
     "		this.#typeObject        = typeObject;\n" \ 
     "		this.#notNull           = notNull;\n" \ 
-    "		this.#tableRowClassFunc = tableRowClassFunc;\n" \ 
+    "		this.#rowClassFunc      = rowClassFunc;\n" \
     "		this.#validateValueFunc = validateValueFunc;\n" \ 
     "		this.#jsValueFunc       = jsValueFunc;\n" \ 
     "		this.#pgValueFunc       = pgValueFunc;\n" \ 
     "		this.#comment           = comment;\n" \ 
     "	}\n" \ 
     "\n" \ 
-    "	getName()          { return this.#name;                }\n" \ 
-    "	getType()          { return this.#type;                }\n" \ 
-    "	isTypeArray()      { return this.#typeArray;           }\n" \ 
-    "	getFieldName()     { return this.#fieldName;           }\n" \ 
-    "	getTypePrimitive() { return this.#typePrimitive;       }\n" \ 
-    "	getTypeObject()    { return this.#typeObject;          }\n" \ 
-    "	isNotNull()        { return this.#notNull;             }\n" \ 
-    "	getTableRowClass() { return this.#tableRowClassFunc(); }\n" \ 
-    "	getComment()       { return this.#comment;             }\n" \ 
+    "	getName()          { return this.#name;           }\n" \
+    "	getType()          { return this.#type;           }\n" \
+    "	isTypeArray()      { return this.#typeArray;      }\n" \
+    "	getFieldName()     { return this.#fieldName;      }\n" \
+    "	getTypePrimitive() { return this.#typePrimitive;  }\n" \
+    "	getTypeObject()    { return this.#typeObject;     }\n" \
+    "	isNotNull()        { return this.#notNull;        }\n" \
+    "	getRowClass()      { return this.#rowClassFunc(); }\n" \
+    "	getComment()       { return this.#comment;        }\n" \
     "\n" \ 
     "	validateValue(value) { this.#validateValueFunc(value); }\n" \ 
     "\n" \ 
@@ -48,85 +93,9 @@
     "\n" \ 
     "}\n" \ 
     "\n" \ 
-    "export class TableRelation {\n" \ 
+    "export class Row {\n" \
     "\n" \ 
-    "	#parentSchema;\n" \ 
-    "	#parentTableName;\n" \ 
-    "	#parentClassFunc;\n" \ 
-    "	#childSchema;\n" \ 
-    "	#childTableName;\n" \ 
-    "	#childClassFunc;\n" \ 
-    "	#childColumns;\n" \ 
-    "	#childColumnOrderPos;\n" \ 
-    "\n" \ 
-    "	constructor(parentSchema, parentTableName, parentClassFunc, childSchema, childTableName, childClassFunc, childColumns, childColumnOrderPos) {\n" \ 
-    "		this.#parentSchema        = parentSchema;\n" \ 
-    "		this.#parentTableName     = parentTableName;\n" \ 
-    "		this.#parentClassFunc     = parentClassFunc;\n" \ 
-    "		this.#childSchema         = childSchema;\n" \ 
-    "		this.#childTableName      = childTableName;\n" \ 
-    "		this.#childClassFunc      = childClassFunc;\n" \ 
-    "		this.#childColumns        = childColumns;\n" \ 
-    "		this.#childColumnOrderPos = childColumnOrderPos;\n" \ 
-    "\n" \ 
-    "	}\n" \ 
-    "\n" \ 
-    "	getParentSchema()        { return this.#parentSchema;        }\n" \ 
-    "	getParentTableName()     { return this.#parentTableName;     }\n" \ 
-    "	getParentClass()         { return this.#parentClassFunc();   }\n" \ 
-    "	getChildSchema()         { return this.#childSchema;         }\n" \ 
-    "	getChildTableName()      { return this.#childTableName;      }\n" \ 
-    "	getChildClass()          { return this.#childClassFunc();    }\n" \ 
-    "	getChildColumns()        { return this.#childColumns;        }\n" \ 
-    "	getChildColumnOrderPos() { return this.#childColumnOrderPos; }\n" \ 
-    "\n" \ 
-    "}\n" \ 
-    "\n" \ 
-    "export class TableMetadata {\n" \ 
-    "\n" \ 
-    "	#schema;\n" \ 
-    "	#tableName;\n" \ 
-    "	#tableComment;\n" \ 
-    "	#columns;\n" \ 
-    "	#columnsPrimaryKey;\n" \ 
-    "	#columnNames;\n" \ 
-    "	#columnNamesPrimaryKey;\n" \ 
-    "	#tableRowClassFunc;\n" \ 
-    "	#tableRowArrayClassFunc;\n" \ 
-    "	#relationsParent;\n" \ 
-    "	#relationsChildFunc;\n" \ 
-    "\n" \ 
-    "	constructor(schema, tableName, tableComment, columns, columnsPrimaryKey, tableRowClassFunc, tableRowArrayClassFunc, relationsParent, relationsChildFunc) {\n" \ 
-    "		this.#schema                 = schema;\n" \ 
-    "		this.#tableName              = tableName;\n" \ 
-    "		this.#tableComment           = tableComment;\n" \ 
-    "		this.#columns                = columns;\n" \ 
-    "		this.#columnsPrimaryKey      = columnsPrimaryKey;\n" \ 
-    "		this.#columnNames            = columns.map( property => property.getName() );\n" \ 
-    "		this.#columnNamesPrimaryKey  = columnsPrimaryKey.map( property => property.getName() );\n" \ 
-    "		this.#tableRowClassFunc      = tableRowClassFunc;\n" \ 
-    "		this.#tableRowArrayClassFunc = tableRowArrayClassFunc;\n" \ 
-    "		this.#relationsParent        = relationsParent;\n" \ 
-    "		this.#relationsChildFunc     = relationsChildFunc;\n" \ 
-    "	}\n" \ 
-    "\n" \ 
-    "	getSchema()                { return this.#schema;                   }\n" \ 
-    "	getTableName()             { return this.#tableName;                }\n" \ 
-    "	getTableComment()          { return this.#tableComment;             }\n" \ 
-    "	getColumns()               { return this.#columns;                  }\n" \ 
-    "	getColumnsPrimaryKey()     { return this.#columnsPrimaryKey;        }\n" \ 
-    "	getColumnNames()           { return this.#columnNames;              }\n" \ 
-    "	getColumnNamesPrimaryKey() { return this.#columnNamesPrimaryKey;    }\n" \ 
-    "	getTableRowClass()         { return this.#tableRowClassFunc();      }\n" \ 
-    "	getTableRowArrayClass()    { return this.#tableRowArrayClassFunc(); }\n" \ 
-    "	getRelationsParent()       { return this.#relationsParent;          }\n" \ 
-    "	getRelationsChild()        { return this.#relationsChildFunc();     }\n" \ 
-    "\n" \ 
-    "}\n" \ 
-    "\n" \ 
-    "export class TableRow {\n" \ 
-    "\n" \ 
-    "	constructor() { if (this.constructor===TableRow) throw new Error(\"TableRow is abstract class\"); }\n" \ 
+    "	constructor() { if (this.constructor===Row) throw new Error(\"Row is abstract class\"); }\n" \
     "\n" \ 
     "	#rowExists = false;\n" \ 
     "	isRowExists() { return this.#rowExists; }\n" \ 
@@ -137,25 +106,25 @@
     "\n" \ 
     "	save(connection) {\n" \ 
     "		validateConnection(connection);\n" \ 
-    "		let tableMetadata = this.constructor.getTableMetadata();\n" \ 
+    "		let relation = this.constructor.getRelation();\n" \ 
     "		let columnsChanged = [];\n" \ 
     "		let values = [];\n" \ 
-    "		tableMetadata.getColumns().filter( column => this.isFieldValueChanged(column) ).forEach( column => {\n" \ 
+    "		relation.getColumns().filter( column => this.isFieldValueChanged(column) ).forEach( column => {\n" \ 
     "			columnsChanged.push(column.getName());\n" \ 
     "			let value = this.getFieldValue(column);\n" \ 
     "			column.validateValue(value);\n" \ 
     "			values.push(column.pgValue(value));\n" \ 
     "		});\n" \ 
-    "        let valuesPrimaryKey = tableMetadata.getColumnsPrimaryKey().map( column => column.pgValue(this.getFieldValue(column)) );\n" \ 
-    "		let fieldValues = sendRequest(\"/pgorm/table-row-save\", { \n" \ 
+    "		let valuesPrimaryKey = relation.getColumnsPrimaryKey().map( column => column.pgValue(this.getFieldValue(column)) );\n" \
+    "		let fieldValues = sendRequest(\"/pgorm/row-save\", { \n" \
     "			\"connectionID\":      connection.getID(), \n" \ 
-    "			\"schema\":            tableMetadata.getSchema(),\n" \ 
-    "			\"tableName\":         tableMetadata.getTableName(),\n" \ 
-    "			\"columns\":           tableMetadata.getColumnNames(),\n" \ 
+    "			\"relationSchema\":    relation.getSchema(),\n" \
+    "			\"relationName\":      relation.getName(),\n" \
+    "			\"columns\":           relation.getColumnNames(),\n" \ 
     "			\"rowExists\":         this.#rowExists,\n" \ 
     "			\"columnsChanged\":    columnsChanged,\n" \ 
     "			\"values\":            values,\n" \ 
-    "			\"columnsPrimaryKey\": tableMetadata.getColumnNamesPrimaryKey(),\n" \ 
+    "			\"columnsPrimaryKey\": relation.getColumnNamesPrimaryKey(),\n" \ 
     "			\"valuesPrimaryKey\":  valuesPrimaryKey\n" \ 
     "		}).row;\n" \ 
     "		this._initialize(fieldValues, true);\n" \ 
@@ -164,68 +133,114 @@
     "\n" \ 
     "	delete(connection) {\n" \ 
     "		validateConnection(connection);\n" \ 
-    "		let tableMetadata = this.constructor.getTableMetadata();\n" \ 
-    "        let valuesPrimaryKey = tableMetadata.getColumnsPrimaryKey().map( column => column.pgValue(this.getFieldValue(column)) );\n" \ 
-    "		let fieldValues = sendRequest(\"/pgorm/table-row-delete\", { \n" \ 
+    "		let relation = this.constructor.getRelation();\n" \ 
+    "		let valuesPrimaryKey = relation.getColumnsPrimaryKey().map( column => column.pgValue(this.getFieldValue(column)) );\n" \
+    "		let fieldValues = sendRequest(\"/pgorm/row-delete\", { \n" \
     "			\"connectionID\":      connection.getID(), \n" \ 
-    "			\"schema\":            tableMetadata.getSchema(),\n" \ 
-    "			\"tableName\":         tableMetadata.getTableName(),\n" \ 
-    "			\"columns\":           tableMetadata.getColumnNames(),\n" \ 
-    "			\"columnsPrimaryKey\": tableMetadata.getColumnNamesPrimaryKey(),\n" \ 
+    "			\"relationSchema\":    relation.getSchema(),\n" \
+    "			\"relationName\":      relation.getName(),\n" \
+    "			\"columns\":           relation.getColumnNames(),\n" \ 
+    "			\"columnsPrimaryKey\": relation.getColumnNamesPrimaryKey(),\n" \ 
     "			\"valuesPrimaryKey\":  valuesPrimaryKey\n" \ 
     "		}).row;\n" \ 
     "		this._initialize(fieldValues, false);\n" \ 
     "		return this;\n" \ 
     "	}	\n" \ 
     "\n" \ 
-    "	static loadByCondition(tableRowClass, connection, condition, params) {\n" \ 
+    "	static loadWhere(rowClass, connection, condition, params) {\n" \
     "		validateConnection(connection);\n" \ 
-    "		let tableMetadata = tableRowClass.getTableMetadata();\n" \ 
-    "		let fieldValues = sendRequest(\"/pgorm/table-row-load-by-condition\", { \n" \ 
-    "			\"connectionID\": connection.getID(), \n" \ 
-    "			\"schema\":       tableMetadata.getSchema(),\n" \ 
-    "			\"tableName\":    tableMetadata.getTableName(),\n" \ 
-    "			\"columns\":      tableMetadata.getColumnNames(),\n" \ 
-    "			\"condition\":    condition,\n" \ 
-    "			\"params\":       params!==null && params!==undefined ? params instanceof Array ? params : [params] : []\n" \ 
+    "		let relation = rowClass.getRelation();\n" \
+    "		let fieldValues = sendRequest(\"/pgorm/row-load-where\", { \n" \
+    "			\"connectionID\":   connection.getID(), \n" \
+    "			\"relationSchema\": relation.getSchema(),\n" \
+    "			\"relationName\":   relation.getName(),\n" \
+    "			\"columns\":        relation.getColumnNames(),\n" \
+    "			\"condition\":      condition,\n" \
+    "			\"params\":         params!==null && params!==undefined ? params instanceof Array ? params : [params] : []\n" \
     "		}).row;\n" \ 
     "		if (fieldValues===null) return null;\n" \ 
-    "		return new tableRowClass()._initialize(fieldValues, true);\n" \ 
+    "		return new rowClass()._initialize(fieldValues, true);\n" \
     "	}	\n" \ 
     "\n" \ 
     "    _initialize(rowExists) { this.#rowExists = rowExists; return this; }\n" \ 
     "\n" \ 
-    "    toJSON() {\n" \
+    "    toJSON() {\n" \ 
     "        let json = {};\n" \ 
-    "        this.constructor.getTableMetadata().getColumns().forEach( column => { json[column.getFieldName()] = this.getFieldValue(column); });\n" \
-    "        return json;\n" \
+    "        this.constructor.getRelation().getColumns().forEach( column => { json[column.getFieldName()] = this.getFieldValue(column); });\n" \ 
+    "        return json;\n" \ 
     "	}\n" \ 
     "\n" \ 
     "}\n" \ 
     "\n" \ 
-    "export class TableRowArray extends Array {\n" \ 
+    "export class RowArray extends Array {\n" \
     "\n" \ 
-    "	constructor() { super(); if (this.constructor===TableRowArray) throw new Error(\"TableRowArray is abstract class\"); }\n" \ 
+    "	constructor() { super(); if (this.constructor===RowArray) throw new Error(\"RowArray is abstract class\"); }\n" \
     "\n" \ 
-    "	static load(tableRowArrayClass, connection, condition, params) {\n" \ 
+    "	static load(rowArrayClass, connection, condition, params) {\n" \
     "		validateConnection(connection);\n" \ 
-    "		let tableMetadata = tableRowArrayClass.getTableMetadata();\n" \ 
-    "		let rows = sendRequest(\"/pgorm/table-row-array-load\", { \n" \ 
-    "			\"connectionID\": connection.getID(), \n" \ 
-    "			\"schema\":       tableMetadata.getSchema(),\n" \ 
-    "			\"tableName\":    tableMetadata.getTableName(),\n" \ 
-    "			\"columns\":      tableMetadata.getColumnNames(),\n" \ 
-    "			\"condition\":    condition!==null && condition!==undefined ? condition : \"\",\n" \ 
-    "			\"params\":       params!==null && params!==undefined ? params instanceof Array ? params : [params] : []\n" \ 
+    "		let relation = rowArrayClass.getRelation();\n" \
+    "		let rows = sendRequest(\"/pgorm/row-array-load\", { \n" \
+    "			\"connectionID\":   connection.getID(), \n" \
+    "			\"relationSchema\": relation.getSchema(),\n" \
+    "			\"relationName\":   relation.getName(),\n" \
+    "			\"columns\":        relation.getColumnNames(),\n" \
+    "			\"condition\":      condition!==null && condition!==undefined ? condition : \"\",\n" \
+    "			\"params\":         params!==null && params!==undefined ? params instanceof Array ? params : [params] : []\n" \
     "		}).rows;\n" \ 
-    "		let tableRowArray = new tableRowArrayClass(); \n" \ 
+    "		let rowArray = new rowArrayClass(); \n" \
     "		rows.forEach( fieldValues => {\n" \ 
-    "			tableRowArray.push(new (tableMetadata.getTableRowClass())()._initialize(fieldValues, true));\n" \ 
+    "			rowArray.push(new (relation.getRowClass())()._initialize(fieldValues, true));\n" \
     "    	});\n" \ 
-    "		return tableRowArray;\n" \ 
+    "		return rowArray;\n" \
+    "	}\n" \
+    "\n" \
+    "	static delete(rowArrayClass, connection, condition, params) {\n" \
+    "		validateConnection(connection);\n" \
+    "		let relation = rowArrayClass.getRelation();\n" \
+    "		return sendRequest(\"/pgorm/row-array-delete\", { \n" \
+    "			\"connectionID\": connection.getID(), \n" \
+    "			\"relationSchema\": relation.getSchema(),\n" \
+    "			\"relationName\":   relation.getName(),\n" \
+    "			\"condition\":      condition!==null && condition!==undefined ? condition : \"\",\n" \
+    "			\"params\":         params!==null && params!==undefined ? params instanceof Array ? params : [params] : []\n" \
+    "		}).rows_deleted;\n" \
     "	}\n" \ 
     "\n" \ 
     "}\n" \ 
+    "\n" \
+    "export class Relationship {\n" \
+    "\n" \
+    "	#parentTableSchema;\n" \
+    "	#parentTableName;\n" \
+    "	#parentClassFunc;\n" \
+    "	#childTableSchema;\n" \
+    "	#childTableName;\n" \
+    "	#childClassFunc;\n" \
+    "	#childColumns;\n" \
+    "	#childColumnOrderPos;\n" \
+    "\n" \
+    "	constructor(parentTableSchema, parentTableName, parentClassFunc, childTableSchema, childTableName, childClassFunc, childColumns, childColumnOrderPos) {\n" \
+    "		this.#parentTableSchema   = parentTableSchema;\n" \
+    "		this.#parentTableName     = parentTableName;\n" \
+    "		this.#parentClassFunc     = parentClassFunc;\n" \
+    "		this.#childTableSchema    = childTableSchema;\n" \
+    "		this.#childTableName      = childTableName;\n" \
+    "		this.#childClassFunc      = childClassFunc;\n" \
+    "		this.#childColumns        = childColumns;\n" \
+    "		this.#childColumnOrderPos = childColumnOrderPos;\n" \
+    "\n" \
+    "	}\n" \
+    "\n" \
+    "	getParentTableSchema()   { return this.#parentTableSchema;   }\n" \
+    "	getParentTableName()     { return this.#parentTableName;     }\n" \
+    "	getParentClass()         { return this.#parentClassFunc();   }\n" \
+    "	getChildTableSchema()    { return this.#childTableSchema;    }\n" \
+    "	getChildTableName()      { return this.#childTableName;      }\n" \
+    "	getChildClass()          { return this.#childClassFunc();    }\n" \
+    "	getChildColumns()        { return this.#childColumns;        }\n" \
+    "	getChildColumnOrderPos() { return this.#childColumnOrderPos; }\n" \
+    "\n" \
+    "}\n" \
     "\n" \ 
     "export class ORMConnection {\n" \ 
     "\n" \ 

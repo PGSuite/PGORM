@@ -6,10 +6,10 @@
 #include "metadata.h"
 
 #define SQL_OBJECTS \
-	"select schema,table_name,'TABLE' object_type,class_name from pgorm.orm_table order by 1,2,3"
+	"select schema,name,'relation',class_name from pgorm.orm_relation order by 1,2"
 
 #define SQL_ACTIONS \
-	"select id,schema,object_name,object_type,action,drop_class_name " \
+	"select id,object_schema,object_name,object_type,action,drop_class_name " \
 	"  from pgorm.orm_action" \
     "  where id>$1" \
 	"  order by id"
@@ -18,10 +18,10 @@
 	"select coalesce(max(id),0) from pgorm.orm_action"
 
 #define SQL_ACTION_INSERT \
-	"insert into pgorm.orm_action(schema,object_name,object_type,action,drop_class_name,orm_server) values ($1,$2,$3,$4,$5,inet_client_addr())"
+	"insert into pgorm.orm_action(object_schema,object_name,object_type,action,drop_class_name,orm_server) values ($1,$2,$3,$4,$5,inet_client_addr())"
 
-#define SQL_ORM_TABLE_EXISTS \
-	"select exists (select from pgorm.orm_table where schema=$1 and table_name=$2)"
+#define SQL_ORM_RELATION_EXISTS \
+	"select exists (select from pgorm.orm_relation where schema=$1 and name=$2)"
 
 #define MODULE_NAME$PGORM_DB "/orm/pgorm-db.js"
 
@@ -43,24 +43,24 @@ int orm_maker_module_path(char *module_path, int module_path_size, char *module_
 	return 0;
 }
 
-int orm_maker_object_refresh(PGconn *pg_conn, char *schema, char *object_name, char *object_type) {
-	if (!strcmp(object_type,"TABLE")) {
-		int orm_table_exists;
-		if (pg_select_bool(&orm_table_exists, pg_conn, SQL_ORM_TABLE_EXISTS, 2, schema, object_name)) return 1;
-		if (!orm_table_exists) return 0;
-		metadata_table table;
-		if (metadata_table_load(&table, pg_conn, schema, object_name)) return 1;
-		if (orm_maker_table_refresh(pg_conn, &table)) return 1;
+int orm_maker_object_refresh(PGconn *pg_conn, char *object_schema, char *object_name, char *object_type) {
+	if (!strcmp(object_type,"relation")) {
+		int orm_relation_exists;
+		if (pg_select_bool(&orm_relation_exists, pg_conn, SQL_ORM_RELATION_EXISTS, 2, object_schema, object_name)) return 1;
+		if (!orm_relation_exists) return 0;
+		metadata_relation relation;
+		if (metadata_relation_load(&relation, pg_conn, object_schema, object_name)) return 1;
+		if (orm_maker_relation_refresh(pg_conn, &relation)) return 1;
 	}
-	if (pg_execute(pg_conn, SQL_ACTION_INSERT, 5, schema, object_name, object_type, "ORM_REFRESH", NULL)) return 1;
+	if (pg_execute(pg_conn, SQL_ACTION_INSERT, 5, object_schema, object_name, object_type, "orm_refresh", NULL)) return 1;
 	return 0;
 }
 
-int orm_maker_object_remove(PGconn *pg_conn, char *schema, char *object_name, char *object_type, char *drop_class_name) {
-	if (!strcmp(object_type,"TABLE")) {
-		if (orm_maker_table_remove(schema, drop_class_name)) return 1;
+int orm_maker_object_remove(PGconn *pg_conn, char *object_schema, char *object_name, char *object_type, char *drop_class_name) {
+	if (!strcmp(object_type,"relation")) {
+		if (orm_maker_relation_remove(object_schema, drop_class_name)) return 1;
 	}
-	if (pg_execute(pg_conn, SQL_ACTION_INSERT, 5, schema, object_name, object_type, "ORM_REMOVE", drop_class_name)) return 1;
+	if (pg_execute(pg_conn, SQL_ACTION_INSERT, 5, object_schema, object_name, object_type, "orm_remove", drop_class_name)) return 1;
 	return 0;
 }
 
@@ -143,7 +143,7 @@ void* orm_maker_thread(void *args) {
 					char *table_name  = PQgetvalue(pg_result, i, 1);
 					char *object_type = PQgetvalue(pg_result, i, 2);
 					char *class_name  = PQgetvalue(pg_result, i, 3);
-					if (!strcmp(object_type,"TABLE")) {
+					if (!strcmp(object_type,"relation")) {
 						if (orm_maker_module_name(module_name, sizeof(module_name), module_base_name, sizeof(module_base_name), schema, class_name)) { res=1; break; }
 						if (orm_maker_module_path(module_path, sizeof(module_path), module_name) || orm_maker_module_path(module_base_path, sizeof(module_base_path), module_base_name)) { res=1; break; }
 						if (stream_add_str(&module_files, module_path, ";", module_base_path, ";", NULL)) { res=1; break; }
@@ -191,15 +191,15 @@ void* orm_maker_thread(void *args) {
 		int res = 0;
 		for(int i=0; i<PQntuples(pg_result); i++) {
 			char *action_id        = PQgetvalue(pg_result, i, 0);
-			char *schema           = PQgetvalue(pg_result, i, 1);
-			char *table_name       = PQgetvalue(pg_result, i, 2);
+			char *object_schema    = PQgetvalue(pg_result, i, 1);
+			char *object_name      = PQgetvalue(pg_result, i, 2);
 			char *object_type      = PQgetvalue(pg_result, i, 3);
 			char *action           = PQgetvalue(pg_result, i, 4);
 			char *drop_class_name  = PQgetvalue(pg_result, i, 5);
-			if (!strcmp(action,"ENABLE") || !strcmp(action,"UPDATE_DEFINITION") || !strcmp(action,"ALTER") || !strcmp(action,"ALTER_CHILD"))
-				if (orm_maker_object_refresh(pg_conn, schema, table_name, object_type)) { res=1; break; };
-			if (!strcmp(action,"DISABLE") || !strcmp(action,"DROP") )
-				if (orm_maker_object_remove(pg_conn, schema, table_name, object_type, drop_class_name)) { res=1; break; };
+			if (!strcmp(action,"enable") || !strcmp(action,"update_definition") || !strcmp(action,"alter") || !strcmp(action,"alter_child"))
+				if (orm_maker_object_refresh(pg_conn, object_schema, object_name, object_type)) { res=1; break; };
+			if (!strcmp(action,"disable") || !strcmp(action,"drop") )
+				if (orm_maker_object_remove(pg_conn, object_schema, object_name, object_type, drop_class_name)) { res=1; break; };
 			str_copy(action_id_last, sizeof(action_id_last), action_id);
 		}
 		PQclear(pg_result);

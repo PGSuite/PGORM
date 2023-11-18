@@ -3,53 +3,65 @@
 #define SQL_SCHEMA \
 	"create schema if not exists pgorm"
 
-#define SQL_TABLE$ORM_TABLE \
-	"create table if not exists pgorm.orm_table(" \
+#define SQL_TABLE$ORM_RELATION \
+	"create table if not exists pgorm.orm_relation(" \
 	"  schema name," \
-	"  table_name name," \
-	"  primary key (schema,table_name)," \
-	"  readonly boolean not null check (not readonly)," \
+	"  name name," \
+	"  primary key (schema,name)," \
+    "  type varchar(16) null check (type in ('table','view'))," \
 	"  class_name name not null," \
 	"  unique (schema,class_name)," \
 	"  module_source text not null" \
 	")"
 
-#define SQL_TABLE$ORM_TABLE_COLUMN \
-	"create table if not exists pgorm.orm_table_column(" \
-	"  schema name," \
-	"  table_name name," \
+#define SQL_TABLE$ORM_RELATION_COLUMN \
+	"create table if not exists pgorm.orm_relation_column(" \
+	"  relation_schema name," \
+	"  relation_name name," \
+	"  foreign key (relation_schema,relation_name) references pgorm.orm_relation on delete cascade," \
 	"  column_name name," \
-	"  primary key (schema,table_name,column_name)," \
-	"  foreign key (schema,table_name) references pgorm.orm_table(schema,table_name) on delete cascade," \
+	"  primary key (relation_schema,relation_name,column_name)," \
 	"  class_field_name name not null" \
 	")"
 
-#define SQL_TABLE$ORM_TABLE_RELATION \
-	"create table if not exists pgorm.orm_table_relation(" \
-	"  parent_schema name," \
+#define SQL_TABLE$ORM_TABLE_FKEY \
+	"create table if not exists pgorm.orm_table_fkey(" \
+	"  parent_table_schema name," \
 	"  parent_table_name name," \
-	"  foreign key (parent_schema,parent_table_name) references pgorm.orm_table on delete cascade," \
-	"  child_schema name," \
+	"  foreign key (parent_table_schema,parent_table_name) references pgorm.orm_relation on delete cascade," \
+	"  child_table_schema name," \
 	"  child_table_name name," \
-	"  foreign key (child_schema,child_table_name) references pgorm.orm_table on delete cascade," \
+	"  foreign key (child_table_schema,child_table_name) references pgorm.orm_relation on delete cascade," \
 	"  child_columns name[]," \
-	"  primary key (parent_schema,parent_table_name,child_schema,child_table_name,child_columns)," \
+	"  primary key (parent_table_schema,parent_table_name,child_table_schema,child_table_name,child_columns)," \
 	"  child_column_sort_pos name," \
-	"  foreign key (child_schema,child_table_name,child_column_sort_pos) references pgorm.orm_table_column on delete cascade," \
+	"  foreign key (child_table_schema,child_table_name,child_column_sort_pos) references pgorm.orm_relation_column on delete cascade," \
 	"  class_field_parent_name varchar(256) not null," \
-	"  unique (child_schema,child_table_name,class_field_parent_name)," \
+	"  unique (child_table_schema,child_table_name,class_field_parent_name)," \
 	"  class_field_child_name varchar(256) not null," \
-	"  unique (parent_schema,parent_table_name,class_field_child_name)" \
+	"  unique (parent_table_schema,parent_table_name,class_field_child_name)" \
+	")"
+
+#define SQL_TABLE$ORM_VIEW_PKEY \
+	"create table if not exists pgorm.orm_view_pkey(" \
+	"  view_schema name," \
+	"  view_name name," \
+	"  primary key (view_schema,view_name)," \
+	"  foreign key (view_schema,view_name) references pgorm.orm_relation on delete cascade," \
+	"  pkey_columns name[]," \
+	"  pkey_table_schema name," \
+	"  pkey_table_name name," \
+	"  foreign key (pkey_table_schema,pkey_table_name) references pgorm.orm_relation on delete set null" \
 	")"
 
 #define SQL_TABLE$ORM_ACTION \
 	"create table if not exists pgorm.orm_action(" \
 	"  id bigserial primary key," \
 	"  timestamp timestamptz not null default now()," \
-	"  schema name not null," \
+	"  object_schema name not null," \
 	"  object_name name not null," \
-	"  object_type varchar(100) not null check (object_type in ('TABLE'))," \
-	"  action varchar(20) not null check (action in ('ENABLE','DISABLE','UPDATE_DEFINITION','ALTER','ALTER_CHILD','DROP','ORM_REFRESH','ORM_REMOVE'))," \
+	"  object_type varchar(100) not null check (object_type in ('relation'))," \
+	"  action varchar(20) not null check (action in ('enable','disable','update_definition','alter','alter_child','drop','orm_refresh','orm_remove'))," \
 	"  drop_class_name name," \
 	"  orm_server inet" \
 	")"
@@ -64,7 +76,7 @@
 	"end; $$"
 
 #define SQL_FUNCTION$ORM_CHILD_COLUMN_ORDER_POS_DEFAULT \
-	"create or replace function pgorm.orm_child_column_sort_pos_default(p_parent_schema name, p_parent_table_name name, p_child_schema name, p_child_table_name name) returns name language plpgsql as $$" "\n" \
+	"create or replace function pgorm.orm_child_column_sort_pos_default(p_parent_table_schema name, p_parent_table_name name, p_child_table_schema name, p_child_table_name name) returns name language plpgsql as $$" "\n" \
 	"begin" "\n" \
 	"  if substring(p_child_table_name, 1, length(p_parent_table_name))!=p_parent_table_name then" "\n" \
 	"    return null;" "\n" \
@@ -73,17 +85,17 @@
 	"    select a.attname" "\n" \
 	"      from pg_attribute a" "\n" \
 	"      join pg_type t on t.oid=atttypid and t.typcategory='N'" "\n" \
-	"      join pgorm.orm_table_column c on c.schema=p_child_schema and c.table_name=p_child_table_name and c.column_name=a.attname" "\n" \
-	"      where attrelid=(p_child_schema||'.'||p_child_table_name)::regclass::oid" "\n" \
+	"      join pgorm.orm_relation_column c on c.relation_schema=p_child_table_schema and c.relation_name=p_child_table_name and c.column_name=a.attname" "\n" \
+	"      where attrelid=(p_child_table_schema||'.'||p_child_table_name)::regclass::oid" "\n" \
 	"        and attname in ('sort_pos','sort_position','order_pos','order_position','by_order','order_by')" "\n" \
 	"      order by 1 limit 1" "\n" \
 	"  );" "\n" \
 	"end; $$"
 
 #define SQL_FUNCTION$ORM_CLASS_FIELD_PARENT_NAME_DEFAULT \
-	"create or replace function pgorm.orm_class_field_parent_name_default(p_parent_schema name, p_parent_table_name name, p_child_schema name, p_child_table_name name, p_child_columns name[]) returns varchar language plpgsql as $$" "\n" \
+	"create or replace function pgorm.orm_class_field_parent_name_default(p_parent_table_schema name, p_parent_table_name name, p_child_table_schema name, p_child_table_name name, p_child_columns name[]) returns varchar language plpgsql as $$" "\n" \
 	"declare" "\n" \
-	"  v_parent_oid oid := (p_parent_schema||'.'||p_parent_table_name)::regclass;" "\n" \
+	"  v_parent_oid oid := (p_parent_table_schema||'.'||p_parent_table_name)::regclass;" "\n" \
 	"  v_parent_column name;" "\n" \
 	"begin" "\n" \
 	"  if array_length(p_child_columns, 1)=1 then" "\n" \
@@ -93,19 +105,19 @@
 	"    end if;" "\n" \
 	"  end if;" "\n" \
 	"  return (" "\n" \
-	"    select (select class_name from pgorm.orm_table where schema=p_parent_schema and table_name=p_parent_table_name) || '$' ||" "\n" \
-	"           string_agg(coalesce(otc.class_field_name, pgorm.orm_identifier_name(c.name)), '$' order by pos)" "\n" \
+	"    select max(pt.class_name) || '$' || string_agg(ctc.class_field_name, '$' order by pos)" "\n" \
 	"      from unnest(p_child_columns) with ordinality c(name,pos)" "\n" \
-	"      left join pgorm.orm_table_column otc on otc.column_name=c.name" "\n" \
+	"      left join pgorm.orm_relation pt on pt.schema=p_parent_table_schema and pt.name=p_parent_table_name" "\n" \
+	"      left join pgorm.orm_relation_column ctc on ctc.relation_schema=p_child_table_schema and ctc.relation_name=p_child_table_name and ctc.column_name=c.name" "\n" \
 	"  );" "\n" \
 	"end; $$"
 
 #define SQL_FUNCTION$ORM_CLASS_FIELD_CHILD_NAME_DEFAULT \
-	"create or replace function pgorm.orm_class_field_child_name_default(p_parent_schema name, p_parent_table_name name, p_child_schema name, p_child_table_name name, p_child_columns name[]) returns varchar language plpgsql as $$" "\n" \
+	"create or replace function pgorm.orm_class_field_child_name_default(p_parent_table_schema name, p_parent_table_name name, p_child_table_schema name, p_child_table_name name, p_child_columns name[]) returns varchar language plpgsql as $$" "\n" \
 	"declare" "\n" \
-	"  v_parent_oid oid := (p_parent_schema||'.'||p_parent_table_name)::regclass;" "\n" \
+	"  v_parent_oid oid := (p_parent_table_schema||'.'||p_parent_table_name)::regclass;" "\n" \
 	"  v_parent_column name;" "\n" \
-	"  v_child_name name := (select class_name from pgorm.orm_table where schema=p_child_schema and table_name=p_child_table_name);" "\n" \
+	"  v_child_name name := (select class_name from pgorm.orm_relation where schema=p_child_table_schema and name=p_child_table_name);" "\n" \
 	"begin" "\n" \
 	"  if array_length(p_child_columns, 1)=1 then" "\n" \
 	"    v_parent_column := (select attname from pg_attribute where attrelid=v_parent_oid and attnum = (select conkey[1] from pg_constraint where contype='p' and conrelid=v_parent_oid));" "\n" \
@@ -114,37 +126,61 @@
 	"    end if;" "\n" \
 	"  end if;" "\n" \
 	"  return (" "\n" \
-	"    select v_child_name || '$' || string_agg(coalesce(otc.class_field_name, pgorm.orm_identifier_name(c.name)), '$' order by pos)" "\n" \
+	"    select v_child_name || '$' || string_agg(ctc.class_field_name, '$' order by pos)" "\n" \
 	"      from unnest(p_child_columns) with ordinality c(name,pos)" "\n" \
-	"      left join pgorm.orm_table_column otc on otc.column_name=c.name" "\n" \
+	"      left join pgorm.orm_relation_column ctc on ctc.relation_schema=p_child_table_schema and ctc.relation_name=p_child_table_name and ctc.column_name=c.name" "\n" \
 	"  );" "\n" \
 	"end; $$"
 
-#define SQL_PROCEDURE$ORM_TABLE_COLUMNS_REFRESH \
-	"create or replace procedure pgorm.orm_table_columns_refresh(schema name, table_name name) language plpgsql as $$" "\n" \
+#define SQL_FUNCTION$ORM_VIEW_PKEY_DEFAULT \
+	"create or replace function pgorm.orm_view_pkey_default(in out p_view_schema name, in out p_view_name name, out p_pkey_columns name[], out p_pkey_table_schema name, out p_pkey_table_name name) returns record language plpgsql as $$" "\n" \
 	"declare" "\n" \
-	"  v_schema name := lower(schema);" "\n" \
-	"  v_table_name name := lower(table_name);" "\n" \
-	"  v_table_oid oid := (v_schema||'.'||v_table_name)::regclass::oid;" "\n" \
+	"  v_view_oid oid := (p_view_schema||'.'||p_view_name)::regclass;" "\n" \
 	"begin" "\n" \
-	"  delete from pgorm.orm_table_column tc" "\n" \
-	"    where tc.schema=v_schema and tc.table_name=v_table_name" "\n" \
-	"      and tc.column_name not in (select attname from pg_attribute where attrelid=v_table_oid and attnum>0);" "\n" \
-	"  insert into pgorm.orm_table_column(schema,table_name,column_name,class_field_name)" "\n" \
-	"    select v_schema,v_table_name,attname,pgorm.orm_identifier_name(attname)" "\n" \
+	"  select array_agg(pkey_column_name order by pkey_column_pos),pkey_table_schema,pkey_table_name" "\n" \
+	"    into p_pkey_columns, p_pkey_table_schema, p_pkey_table_name " "\n" \
+	"    from (" "\n" \
+	"      select relnamespace::regnamespace::text pkey_table_schema, relname pkey_table_name, array_length(conkey,1) pkey_columns_count, ta.attname pkey_column_name, array_position(conkey, ta.attnum) pkey_column_pos" "\n" \
+	"        from pg_rewrite" "\n" \
+	"        join pg_depend on pg_depend.objid = pg_rewrite.oid" "\n" \
+	"        join pg_class on pg_class.oid = pg_depend.refobjid" "\n" \
+	"        join pg_constraint on conrelid=pg_class.oid and contype='p'" "\n" \
+	"        join pg_attribute ta on ta.attrelid = pg_depend.refobjid and ta.attnum=pg_depend.refobjsubid and ta.attnum = any(conkey)" "\n" \
+	"        join pg_attribute va on va.attrelid = ev_class and va.attname=ta.attname" "\n" \
+	"        where ev_class=v_view_oid" "\n" \
+	"    ) tc" "\n" \
+	"    join pgorm.orm_relation r on r.schema=tc.pkey_table_schema and r.name=tc.pkey_table_name and r.type='table'" "\n" \
+	"    group by pkey_table_schema,pkey_table_name,pkey_columns_count" "\n" \
+	"    having pkey_columns_count = count(1)" "\n" \
+	"    order by 2,3" "\n" \
+	"    limit 1;" "\n" \
+	"end; $$"
+
+#define SQL_PROCEDURE$ORM_RELATION_COLUMN_REFRESH \
+	"create or replace procedure pgorm.orm_relation_column_refresh(relation_schema name, relation_name name) language plpgsql as $$" "\n" \
+	"declare" "\n" \
+	"  v_relation_schema name := lower(relation_schema);" "\n" \
+	"  v_relation_name name := lower(relation_name);" "\n" \
+	"  v_relation_oid oid := (v_relation_schema||'.'||v_relation_name)::regclass::oid;" "\n" \
+	"begin" "\n" \
+	"  delete from pgorm.orm_relation_column rc" "\n" \
+	"    where rc.relation_schema=v_relation_schema and rc.relation_name=v_relation_name" "\n" \
+	"      and rc.column_name not in (select attname from pg_attribute where attrelid=v_relation_oid and attnum>0);" "\n" \
+	"  insert into pgorm.orm_relation_column(relation_schema,relation_name,column_name,class_field_name)" "\n" \
+	"    select v_relation_schema,v_relation_name,attname,pgorm.orm_identifier_name(attname)" "\n" \
 	"      from pg_attribute" "\n" \
-	"      where attrelid=v_table_oid and attnum>0 and exists (select from pgorm.orm_table t where t.schema=v_schema and t.table_name=v_table_name)" "\n" \
+	"      where attrelid=v_relation_oid and attnum>0 and exists (select from pgorm.orm_relation r where r.schema=v_relation_schema and r.name=v_relation_name)" "\n" \
 	"      on conflict do nothing;" "\n" \
 	"end; $$"
 
-#define SQL_PROCEDURE$ORM_TABLE_RELATIONS_REFRESH \
-	"create or replace procedure pgorm.orm_table_relations_refresh(schema name, table_name name) language plpgsql as $$" "\n" \
+#define SQL_PROCEDURE$ORM_TABLE_FKEY_REFRESH \
+	"create or replace procedure pgorm.orm_table_fkey_refresh(table_schema name, table_name name) language plpgsql as $$" "\n" \
 	"declare" "\n" \
-	"  v_schema name := lower(schema);" "\n" \
+	"  v_table_schema name := lower(table_schema);" "\n" \
 	"  v_table_name name := lower(table_name);" "\n" \
-	"  v_table_oid oid := (v_schema||'.'||v_table_name)::regclass::oid;" "\n" \
+	"  v_table_oid oid := (v_table_schema||'.'||v_table_name)::regclass::oid;" "\n" \
 	"  v_sql_parents text :=" "\n" \
-	"    'select pn.nspname parent_schema,pc.relname parent_table_name,cn.nspname child_schema,cc.relname child_table_name," "\n" \
+	"    'select pn.nspname parent_table_schema,pc.relname parent_table_name,cn.nspname child_table_schema,cc.relname child_table_name," "\n" \
 	"             (select array_agg(attname order by pos)" "\n" \
 	"               from unnest(c.conkey) with ordinality as conkey(attnum, pos)" "\n" \
 	"               join pg_attribute a on a.attrelid=c.conrelid and a.attnum=conkey.attnum" "\n" \
@@ -155,105 +191,111 @@
 	"        join pg_class pc on pc.oid=c.confrelid" "\n" \
 	"        join pg_namespace pn on pn.oid=pc.relnamespace" "\n" \
 	"        join pg_constraint pk on pk.conrelid=c.confrelid and pk.contype=''p'' and pk.conkey=c.confkey" "\n" \
-	"        join pgorm.orm_table pot on pot.schema=pn.nspname and pot.table_name=pc.relname" "\n" \
+	"        join pgorm.orm_relation pot on pot.schema=pn.nspname and pot.name=pc.relname and pot.type=''table''" "\n" \
 	"        where c.contype=''f'' and c.conrelid=$1';" "\n" \
 	"begin" "\n" \
 	"  execute" "\n" \
-	"    'delete from pgorm.orm_table_relation" "\n" \
-	"       where child_schema=$2 and child_table_name=$3" "\n" \
-	"         and (parent_schema,parent_table_name,child_schema,child_table_name,child_columns) not in (' || v_sql_parents|| ');'" "\n" \
-	"    using v_table_oid,v_schema,v_table_name;" "\n" \
+	"    'delete from pgorm.orm_table_fkey" "\n" \
+	"       where child_table_schema=$2 and child_table_name=$3" "\n" \
+	"         and (parent_table_schema,parent_table_name,child_table_schema,child_table_name,child_columns) not in (' || v_sql_parents|| ');'" "\n" \
+	"    using v_table_oid,v_table_schema,v_table_name;" "\n" \
 	"  execute" "\n" \
-	"    'insert into pgorm.orm_table_relation(parent_schema,parent_table_name,child_schema,child_table_name,child_columns,child_column_sort_pos,class_field_parent_name,class_field_child_name)" "\n" \
+	"    'insert into pgorm.orm_table_fkey(parent_table_schema,parent_table_name,child_table_schema,child_table_name,child_columns,child_column_sort_pos,class_field_parent_name,class_field_child_name)" "\n" \
 	"       select p.*," "\n" \
-	"              pgorm.orm_child_column_sort_pos_default(parent_schema, parent_table_name, child_schema, child_table_name)," "\n" \
-	"              pgorm.orm_class_field_parent_name_default(parent_schema, parent_table_name, child_schema, child_table_name, child_columns)," "\n" \
-	"              pgorm.orm_class_field_child_name_default(parent_schema, parent_table_name, child_schema, child_table_name, child_columns)" "\n" \
-	"        from (' || v_sql_parents|| ') p" "\n" \
-	"     on conflict (parent_schema,parent_table_name,child_schema,child_table_name,child_columns) do nothing;'" "\n" \
+	"              pgorm.orm_child_column_sort_pos_default(parent_table_schema, parent_table_name, child_table_schema, child_table_name)," "\n" \
+	"              pgorm.orm_class_field_parent_name_default(parent_table_schema, parent_table_name, child_table_schema, child_table_name, child_columns)," "\n" \
+	"              pgorm.orm_class_field_child_name_default(parent_table_schema, parent_table_name, child_table_schema, child_table_name, child_columns)" "\n" \
+	"         from (' || v_sql_parents|| ') p" "\n" \
+	"         on conflict (parent_table_schema,parent_table_name,child_table_schema,child_table_name,child_columns) do nothing;'" "\n" \
 	"    using v_table_oid;" "\n" \
 	"end; $$"
 
-#define SQL_PROCEDURE$ORM_TABLE_ENABLE \
-	"create or replace procedure pgorm.orm_table_enable(schema name, table_name name, class_name name default null) language plpgsql as $$" "\n" \
+#define SQL_PROCEDURE$ORM_RELATION_ENABLE \
+	"create or replace procedure pgorm.orm_relation_enable(relation_schema name, relation_name name, class_name name default null) language plpgsql as $$" "\n" \
 	"declare" "\n" \
-	"  v_schema name := lower(schema);" "\n" \
-	"  v_table_name name := lower(table_name);" "\n" \
-	"  v_class_name name := coalesce(class_name, pgorm.orm_identifier_name(table_name));" "\n" \
+	"  v_relation_schema name := lower(relation_schema);" "\n" \
+	"  v_relation_name name := lower(relation_name);" "\n" \
+	"  v_relation_oid oid=(v_relation_schema||'.'||v_relation_name)::regclass::oid;" "\n" \
+    "  v_relation_type varchar(10) := (select case when relkind='r' then 'table' when relkind='v' then 'view' else null end from pg_class where oid=v_relation_oid);" "\n" \
+	"  v_class_name name := coalesce(class_name, pgorm.orm_identifier_name(relation_name));" "\n" \
 	"  v_newline char := chr(10);" "\n" \
 	"  v_module_source text :=" "\n" \
-	"    '// Module can be edited by changing field \"module_source\" of table \"pgorm.orm_table\"'||v_newline||v_newline||" "\n" \
-	"    'import { Base'||v_class_name||',Base'||v_class_name||'Array } from \"/orm/'||v_schema||'/base/Base'||v_class_name||'.js\"'||v_newline||v_newline||" "\n" \
+	"    '// Module can be edited by changing field \"module_source\" of table \"pgorm.orm_relation\"'||v_newline||v_newline||" "\n" \
+	"    'import { Base'||v_class_name||',Base'||v_class_name||'Array } from \"/orm/'||v_relation_schema||'/base/Base'||v_class_name||'.js\"'||v_newline||v_newline||" "\n" \
 	"    'export class '||v_class_name||' extends Base'||v_class_name||' {'||v_newline||v_newline||'}'||v_newline||v_newline||" "\n" \
 	"    'export class '||v_class_name||'Array extends Base'||v_class_name||'Array {'||v_newline||v_newline||'}';" "\n" \
 	"begin" "\n" \
-	"  if not exists (select 1 from pg_tables where schemaname=v_schema and tablename=v_table_name) then" "\n" \
-	"    raise exception 'Table %.% not exists', v_schema, v_table_name;" "\n" \
+	"  if v_relation_type is null then" "\n" \
+	"    raise exception 'Relation %.% not exists', v_relation_schema, v_relation_name;" "\n" \
 	"  end if;" "\n" \
-	"  insert into pgorm.orm_table(schema, table_name, readonly, class_name, module_source)" "\n" \
-	"    values (v_schema, v_table_name, false, v_class_name, v_module_source)" "\n" \
+	"  insert into pgorm.orm_relation(schema, name, type, class_name, module_source)" "\n" \
+	"    values (v_relation_schema, v_relation_name, v_relation_type, v_class_name, v_module_source)" "\n" \
 	"    on conflict do nothing;" "\n" \
-	"  call pgorm.orm_table_columns_refresh(v_schema, v_table_name);" "\n" \
-	"  call pgorm.orm_table_relations_refresh(v_schema, v_table_name);" "\n" \
-	"  insert into pgorm.orm_action(schema, object_name, object_type, action)" "\n" \
-	"    values(v_schema, v_table_name, 'TABLE', 'ENABLE');" "\n" \
-	"end; $$"
-
-#define SQL_PROCEDURE$ORM_TABLE_ENABLE_SIMPLE \
-	"create or replace procedure pgorm.orm_table_enable(table_name name) language plpgsql as $$" "\n" \
-	"begin" "\n" \
-	"  call pgorm.orm_table_enable(current_schema(), table_name);" "\n" \
-	"end; $$"
-
-#define SQL_PROCEDURE$ORM_TABLE_DISABLE \
-	"create or replace procedure pgorm.orm_table_disable(schema name, table_name name) language plpgsql as $$" "\n" \
-	"declare" "\n" \
-	"  v_schema name := lower(schema);" "\n" \
-	"  v_table_name name := lower(table_name);" "\n" \
-	"begin" "\n" \
-	"  insert into pgorm.orm_action(schema, object_name, object_type, action, drop_class_name)" "\n" \
-	"    select t.schema, t.table_name, 'TABLE', 'DISABLE', t.class_name from pgorm.orm_table t" "\n" \
-	"      where t.schema=v_schema and t.table_name=v_table_name;" "\n" \
-	"  delete from pgorm.orm_table t where t.schema=v_schema and t.table_name=v_table_name;" "\n" \
-	"end; $$"
-
-#define SQL_PROCEDURE$ORM_TABLE_DISABLE_SIMPLE \
-	"create or replace procedure pgorm.orm_table_disable(table_name name) language plpgsql as $$" "\n" \
-	"begin" "\n" \
-	"  call pgorm.orm_table_disable(current_schema(), table_name);" "\n" \
-	"end; $$"
-
-#define SQL_FUNCTION$ORM_TABLE_FN_UPDATE \
-	"create or replace function pgorm.orm_table_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
-	"begin" "\n" \
-	"  if old.schema!=new.schema or old.table_name!=new.table_name or old.class_name!=new.class_name then" "\n" \
-	"    raise exception 'Not allowed to change schema,table_name or class_name, use pgorm.orm_table_disable/enable';" "\n" \
+	"  call pgorm.orm_relation_column_refresh(v_relation_schema, v_relation_name);" "\n" \
+	"  if v_relation_type='table' then" "\n" \
+	"    call pgorm.orm_table_fkey_refresh(v_relation_schema, v_relation_name);" "\n" \
+	"  else" "\n" \
+	"    insert into pgorm.orm_view_pkey(view_schema, view_name, pkey_columns, pkey_table_schema, pkey_table_name)" "\n" \
+	"      select (pgorm.orm_view_pkey_default(v_relation_schema, v_relation_name)).*" \
+	"      on conflict do nothing;" "\n" \
 	"  end if;" "\n" \
-	"  insert into pgorm.orm_action(schema,object_name,object_type,action) values(new.schema,new.table_name,'TABLE','UPDATE_DEFINITION');" "\n" \
+	"  insert into pgorm.orm_action(object_schema, object_name, object_type, action)" "\n" \
+	"    values(v_relation_schema, v_relation_name, 'relation', 'enable');" "\n" \
+	"end; $$"
+
+#define SQL_PROCEDURE$ORM_RELATION_ENABLE_SIMPLE \
+	"create or replace procedure pgorm.orm_relation_enable(relation_name name) language plpgsql as $$" "\n" \
+	"begin" "\n" \
+	"  call pgorm.orm_relation_enable(current_schema(), relation_name);" "\n" \
+	"end; $$"
+
+#define SQL_PROCEDURE$ORM_RELATION_DISABLE \
+	"create or replace procedure pgorm.orm_relation_disable(relation_schema name, relation_name name) language plpgsql as $$" "\n" \
+	"declare" "\n" \
+	"  v_relation_schema name := lower(relation_schema);" "\n" \
+	"  v_relation_name name := lower(relation_name);" "\n" \
+	"begin" "\n" \
+	"  insert into pgorm.orm_action(object_schema, object_name, object_type, action, drop_class_name)" "\n" \
+	"    select r.schema, r.name, 'relation', 'disable', r.class_name from pgorm.orm_relation r" "\n" \
+	"      where r.schema=v_relation_schema and r.name=v_relation_name;" "\n" \
+	"  delete from pgorm.orm_relation r where r.schema=v_relation_schema and r.name=v_relation_name;" "\n" \
+	"end; $$"
+
+#define SQL_PROCEDURE$ORM_RELATION_DISABLE_SIMPLE \
+	"create or replace procedure pgorm.orm_relation_disable(relation_name name) language plpgsql as $$" "\n" \
+	"begin" "\n" \
+	"  call pgorm.orm_relation_disable(current_schema(), relation_name);" "\n" \
+	"end; $$"
+
+#define SQL_FUNCTION$ORM_RELATION_FN_UPDATE \
+	"create or replace function pgorm.orm_relation_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
+	"begin" "\n" \
+	"  if old.schema!=new.schema or old.name!=new.name or old.class_name!=new.class_name then" "\n" \
+	"    raise exception 'Not allowed to change schema,name or class_name, use pgorm.orm_relation_disable/enable';" "\n" \
+	"  end if;" "\n" \
+	"  insert into pgorm.orm_action(object_schema,object_name,object_type,action) values(new.schema,new.name,'relation','update_definition');" "\n" \
 	"  return null;" "\n" \
 	"end; $$"
 
-#define SQL_FUNCTION$ORM_TABLE_COLUMN_FN_UPDATE \
-	"create or replace function pgorm.orm_table_column_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
+#define SQL_FUNCTION$ORM_RELATION_COLUMN_FN_UPDATE \
+	"create or replace function pgorm.orm_relation_column_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
 	"begin" "\n" \
-	"  if old.schema!=new.schema or old.table_name!=new.table_name or old.column_name!=new.column_name then" "\n" \
+	"  if old.schema!=new.schema or old.relation_name!=new.relation_name or old.column_name!=new.column_name then" "\n" \
 	"    raise exception 'Not allowed to change schema, table_name or column_name';" "\n" \
 	"  end if;" "\n" \
-	"  insert into pgorm.orm_action(schema,object_name,object_type,action) values(new.schema,new.table_name,'TABLE','UPDATE_DEFINITION');" "\n" \
+	"  insert into pgorm.orm_action(object_schema,object_name,object_type,action) values(new.schema,new.relation_name,'relation','update_definition');" "\n" \
 	"  return null;" "\n" \
 	"end; $$"
 
-#define SQL_FUNCTION$ORM_TABLE_RELATION_FN_UPDATE \
-	"create or replace function pgorm.orm_table_relation_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
+#define SQL_FUNCTION$ORM_TABLE_FKEY_FN_UPDATE \
+	"create or replace function pgorm.orm_table_fkey_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
 	"begin" "\n" \
-	"  if old.parent_schema!=new.parent_schema or old.parent_table_name!=new.parent_table_name or old.child_schema!=new.child_schema or old.child_table_name!=new.child_table_name or old.child_columns!=new.child_columns then" "\n" \
-	"    raise exception 'Not allowed to change parent_schema, parent_table_name, child_schema, child_table_name or child_columns';" "\n" \
+	"  if old.parent_table_schema!=new.parent_table_schema or old.parent_table_name!=new.parent_table_name or old.child_table_schema!=new.child_table_schema or old.child_table_name!=new.child_table_name or old.child_columns!=new.child_columns then" "\n" \
+	"    raise exception 'Not allowed to change parent_table_schema, parent_table_name, child_table_schema, child_table_name or child_columns';" "\n" \
 	"  end if;" "\n" \
-	"  if old.class_parent_name!=new.class_parent_name or old.class_children_name!=new.class_children_name then" "\n" \
-	"    insert into pgorm.orm_action(schema,object_name,object_type,action) values" "\n" \
-	"      (new.parent_schema,new.parent_table_name,'TABLE','UPDATE_DEFINITION')," "\n" \
-	"      (new.child_schema,new.child_table_name,'TABLE','UPDATE_DEFINITION');" "\n" \
-	"  end if;" "\n" \
+	"  insert into pgorm.orm_action(object_schema,object_name,object_type,action) values" "\n" \
+	"    (new.parent_table_schema,new.parent_table_name,'relation','update_definition')," "\n" \
+	"    (new.child_table_schema,new.child_table_name,'relation','update_definition');" "\n" \
 	"  return null;" "\n" \
 	"end; $$"
 
@@ -263,30 +305,30 @@
 	"  rec record;" "\n" \
 	"begin" "\n" \
 	"  for rec in (" "\n" \
-	"    select t.schema,t.table_name" "\n" \
+	"    select t.schema,t.name" "\n" \
 	"      from pg_event_trigger_ddl_commands() e" "\n" \
 	"      join pg_class c on c.oid=e.objid" "\n" \
-	"      join pgorm.orm_table t on t.schema=e.schema_name and t.table_name=c.relname" "\n" \
+	"      join pgorm.orm_relation t on t.schema=e.schema_name and t.name=c.relname and t.type='table'" "\n" \
 	"      where e.object_type in ('table','table column')" "\n" \
 	"   ) loop" "\n" \
-	"     call pgorm.orm_table_columns_refresh(rec.schema,rec.table_name);" "\n" \
-	"     call pgorm.orm_table_relations_refresh(rec.schema,rec.table_name);" "\n" \
-	"     insert into pgorm.orm_action(schema,object_name,object_type,action)" "\n" \
-	"       select rec.schema,rec.table_name,'TABLE','ALTER'" "\n" \
+	"     call pgorm.orm_table_column_refresh(rec.schema,rec.table_name);" "\n" \
+	"     call pgorm.orm_table_fkey_refresh(rec.schema,rec.table_name);" "\n" \
+	"     insert into pgorm.orm_action(object_schema,object_name,object_type,action)" "\n" \
+	"       select rec.schema,rec.name,'table','alter'" "\n" \
 	"       union all" "\n" \
-	"       select distinct parent_schema,parent_table_name,'TABLE','ALTER_CHILD' from pgorm.orm_table_relation where child_schema=rec.schema and child_table_name=rec.table_name;" "\n" \
+	"       select distinct parent_table_schema,parent_table_name,'table','alter_child' from pgorm.orm_table_fkey where child_table_schema=rec.schema and child_table_name=rec.table_name;" "\n" \
 	"   end loop;" "\n" \
 	"end; $$"
 
 #define SQL_FUNCTION$EVENT_FN_DROP_OBJECTS \
 	"create or replace function pgorm.event_fn_drop_objects() returns event_trigger language plpgsql security definer as $$" "\n" \
 	"begin" "\n" \
-	"  insert into pgorm.orm_action(schema,object_name,object_type,action,drop_class_name)" "\n" \
-	"    select t.schema,t.table_name,'TABLE','DROP',t.class_name" "\n" \
+	"  insert into pgorm.orm_action(object_schema,object_name,object_type,action,drop_class_name)" "\n" \
+	"    select r.schema,r.name,'relation','drop',r.class_name" "\n" \
 	"      from pg_event_trigger_dropped_objects() e" "\n" \
-	"      join pgorm.orm_table t on t.schema=e.schema_name and t.table_name=e.object_name and e.object_type='table';" "\n" \
-	"  delete from pgorm.orm_table" "\n" \
-	"    where (schema,table_name) in (select schema_name,table_name from pg_event_trigger_dropped_objects() where object_type='table');" "\n" \
+	"      join pgorm.orm_relation r on r.schema=e.schema_name and r.name=e.object_name and e.object_type in ('table','view');" "\n" \
+	"  delete from pgorm.orm_relation" "\n" \
+	"    where (schema,name) in (select schema_name,object_name from pg_event_trigger_dropped_objects() where object_type in ('table','view'));" "\n" \
 	"end; $$"
 
 #define SQL_BLOCK$CREATE_TRIGGERS \
@@ -297,36 +339,38 @@
 	"  if not exists (select from pg_event_trigger where evtname='pgorm_event_tg_drop_objects') then" "\n" \
 	"    create event trigger pgorm_event_tg_drop_objects on sql_drop when tag in ('DROP TABLE','DROP SCHEMA') execute function pgorm.event_fn_drop_objects();" "\n" \
 	"  end if;" "\n" \
-	"  if not exists (select from pg_trigger where tgname='pgorm_table_tg_update') then" "\n" \
-	"    create trigger pgorm_table_tg_update after update on pgorm.orm_table for each row execute function pgorm.orm_table_fn_update();" "\n" \
+	"  if not exists (select from pg_trigger where tgname='pgorm_relation_tg_update') then" "\n" \
+	"    create trigger pgorm_relation_tg_update after update on pgorm.orm_relation for each row execute function pgorm.orm_relation_fn_update();" "\n" \
 	"  end if;" "\n" \
-	"  if not exists (select from pg_trigger where tgname='pgorm_table_column_tg_update') then" "\n" \
-	"    create trigger pgorm_table_column_tg_update after update on pgorm.orm_table_column for each row execute function pgorm.orm_table_column_fn_update();" "\n" \
+	"  if not exists (select from pg_trigger where tgname='pgorm_relation_column_tg_update') then" "\n" \
+	"    create trigger pgorm_relation_column_tg_update after update on pgorm.orm_relation_column for each row execute function pgorm.orm_relation_column_fn_update();" "\n" \
 	"  end if;" "\n" \
-	"  if not exists (select from pg_trigger where tgname='pgorm_table_relation_tg_update') then" "\n" \
-	"    create trigger pgorm_table_relation_tg_update after update on pgorm.orm_table_relation for each row execute function pgorm.orm_table_relation_fn_update();" "\n" \
+	"  if not exists (select from pg_trigger where tgname='pgorm_table_fkey_tg_update') then" "\n" \
+	"    create trigger pgorm_table_fkey_tg_update after update on pgorm.orm_table_fkey for each row execute function pgorm.orm_table_fkey_fn_update();" "\n" \
 	"  end if;" "\n" \
 	"end $$"
 
 const char *SQL_LIST[] = {
 	SQL_SCHEMA,
-	SQL_TABLE$ORM_TABLE,
-	SQL_TABLE$ORM_TABLE_COLUMN,
-	SQL_TABLE$ORM_TABLE_RELATION,
+	SQL_TABLE$ORM_RELATION,
+	SQL_TABLE$ORM_RELATION_COLUMN,
+	SQL_TABLE$ORM_TABLE_FKEY,
+	SQL_TABLE$ORM_VIEW_PKEY,
 	SQL_TABLE$ORM_ACTION,
 	SQL_FUNCTION$ORM_IDENTIFIER_NAME,
 	SQL_FUNCTION$ORM_CHILD_COLUMN_ORDER_POS_DEFAULT,
 	SQL_FUNCTION$ORM_CLASS_FIELD_PARENT_NAME_DEFAULT,
 	SQL_FUNCTION$ORM_CLASS_FIELD_CHILD_NAME_DEFAULT,
-	SQL_PROCEDURE$ORM_TABLE_COLUMNS_REFRESH,
-	SQL_PROCEDURE$ORM_TABLE_RELATIONS_REFRESH,
-	SQL_PROCEDURE$ORM_TABLE_ENABLE,
-	SQL_PROCEDURE$ORM_TABLE_ENABLE_SIMPLE,
-	SQL_PROCEDURE$ORM_TABLE_DISABLE,
-	SQL_PROCEDURE$ORM_TABLE_DISABLE_SIMPLE,
-	SQL_FUNCTION$ORM_TABLE_FN_UPDATE,
-    SQL_FUNCTION$ORM_TABLE_COLUMN_FN_UPDATE,
-	SQL_FUNCTION$ORM_TABLE_RELATION_FN_UPDATE,
+	SQL_FUNCTION$ORM_VIEW_PKEY_DEFAULT,
+	SQL_PROCEDURE$ORM_RELATION_COLUMN_REFRESH,
+	SQL_PROCEDURE$ORM_TABLE_FKEY_REFRESH,
+	SQL_PROCEDURE$ORM_RELATION_ENABLE,
+	SQL_PROCEDURE$ORM_RELATION_ENABLE_SIMPLE,
+	SQL_PROCEDURE$ORM_RELATION_DISABLE,
+	SQL_PROCEDURE$ORM_RELATION_DISABLE_SIMPLE,
+	SQL_FUNCTION$ORM_RELATION_FN_UPDATE,
+    SQL_FUNCTION$ORM_RELATION_COLUMN_FN_UPDATE,
+	SQL_FUNCTION$ORM_TABLE_FKEY_FN_UPDATE,
 	SQL_FUNCTION$EVENT_FN_ALTER_TABLE,
 	SQL_FUNCTION$EVENT_FN_DROP_OBJECTS,
 	SQL_BLOCK$CREATE_TRIGGERS

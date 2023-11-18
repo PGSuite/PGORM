@@ -11,8 +11,8 @@ void class_gen_test() {
 	PGconn *pg_conn;
 	if (pg_connect(&pg_conn, "postgresql:///pgsuite?connect_timeout=10&user=postgres")) return;
 
-	metadata_table table;
-	if (metadata_table_load(&table, pg_conn, "test","type_sample")) return;
-	orm_maker_table_refresh(pg_conn, &table);
+	metadata_relation relation;
+	if (metadata_relation_load(&relation, pg_conn, "test","type_sample")) return;
+	orm_maker_relation_refresh(pg_conn, &relation);
 
 }
