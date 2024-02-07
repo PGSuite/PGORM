@@ -1,5 +1,9 @@
 #include <dirent.h>
 
+#include <sys/types.h>
+#include <unistd.h>
+
+
 #include "globals.h"
 #include "util/utils.h"
 
@@ -25,6 +29,8 @@
 
 #define MODULE_NAME$PGORM_DB "/orm/pgorm-db.js"
 
+metadata_relation *relation;
+
 int orm_maker_module_name(char *module_name, int module_name_size, char *module_base_name, int module_base_name_size, char *schema, char *class_name) {
 	module_name[0] = 0;
 	module_base_name[0] = 0;
@@ -48,9 +54,8 @@ int orm_maker_object_refresh(PGconn *pg_conn, char *object_schema, char *object_
 		int orm_relation_exists;
 		if (pg_select_bool(&orm_relation_exists, pg_conn, SQL_ORM_RELATION_EXISTS, 2, object_schema, object_name)) return 1;
 		if (!orm_relation_exists) return 0;
-		metadata_relation relation;
-		if (metadata_relation_load(&relation, pg_conn, object_schema, object_name)) return 1;
-		if (orm_maker_relation_refresh(pg_conn, &relation)) return 1;
+		if (metadata_relation_load(relation, pg_conn, object_schema, object_name)) return 1;
+		if (orm_maker_relation_refresh(pg_conn, relation)) return 1;
 	}
 	if (pg_execute(pg_conn, SQL_ACTION_INSERT, 5, object_schema, object_name, object_type, "orm_refresh", NULL)) return 1;
 	return 0;
@@ -89,11 +94,13 @@ void orm_maker_try_remove_obsolete_files(char *dir_path, stream *module_files) {
 		if (errno!=2 && errno!=39 && errno!=41) log_error(79, dir_path, errno);
 	} else
 		log_info("obsolete directory \"%s\" removed", dir_path);
- }
+}
 
 void* orm_maker_thread(void *args) {
 
 	thread_begin(args);
+
+	if (thread_mem_alloc(&relation, sizeof(metadata_relation))) log_exit_fatal();
 
 	for(;1;sleep(60)) {
 		char module_path[STR_SIZE];

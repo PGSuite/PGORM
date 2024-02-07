@@ -11,7 +11,14 @@ int admin_get_status_info(char *status_info, int status_info_size) {
 	if (globals_add_parameters(status_info, status_info_size)) return 1;
 	int uptime = log_get_uptime();
 	int uptime_s = uptime%60, uptime_m = (uptime/60)%60, uptime_h = (uptime/60/60)%24, uptime_d = uptime/60/60/24;
-	return str_add_format(status_info, status_info_size, "\nStatus info\n  uptime:  %3d %02d:%02d:%02d\n  threads: %3d\n\n", uptime_d, uptime_h, uptime_m, uptime_s, thread_get_count());
+	return str_add_format(status_info, status_info_size,
+		"\nStatus info"
+		"\n  uptime:  %3d %02d:%02d:%02d"
+		"\n  threads: %3d"
+		"\n\n",
+		uptime_d, uptime_h, uptime_m, uptime_s,
+		thread_get_count()
+	);
 }
 
 void* admin_server(void *args) {

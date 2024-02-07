@@ -267,6 +267,40 @@
 	"  call pgorm.orm_relation_disable(current_schema(), relation_name);" "\n" \
 	"end; $$"
 
+#define SQL_PROCEDURE$ORM_RECORD_SAVE \
+	"create or replace procedure pgorm.orm_record_save(inout orm_record jsonb) language plpgsql as $$" "\n" \
+	"declare" "\n" \
+	"  v_sql text;" "\n" \
+	"  v_orm jsonb;" "\n" \
+	"begin" "\n" \
+	"  if orm_record is null then return; end if;" "\n" \
+	"  if not (orm_record ? '#orm' ) then raise exception 'Record JSON does not contain key ''#orm'''; end if;" "\n" \
+	"  v_orm := orm_record->'#orm';" "\n" \
+	"  if v_orm->'record_exists' then" "\n" \
+	"	 if jsonb_array_length(v_orm->'columns_changed')=0 then return; end if;" "\n" \
+	"    v_sql:='update '||(v_orm->>'relation')||' as relation set '||(select string_agg(c||'=record.'||c, ',') from jsonb_array_elements_text(v_orm->'columns_changed') c)||" "\n" \
+	"      ' from jsonb_populate_record(null::'||(v_orm->>'relation')||',$1) record where '||" "\n" \
+	"      (select string_agg('relation.'||c||'=record.'||c, ' and ') from jsonb_array_elements_text(v_orm->'columns_primary_key') c);" "\n" \
+	"  else" "\n" \
+	"    v_sql := (select string_agg(c, ',') from jsonb_array_elements_text(v_orm->'columns_changed') c);" "\n" \
+	"    v_sql:='insert into '||(v_orm->>'relation')||' as relation ('||v_sql||') select '||v_sql||' from jsonb_populate_record(null::'||(v_orm->>'relation')||',$1)';" "\n" \
+	"  end if;" "\n" \
+	"  v_sql := v_sql||' returning to_jsonb(relation)';" "\n" \
+	"  execute v_sql using orm_record into orm_record;" "\n" \
+	"  orm_record := orm_record||jsonb_build_object('#orm', v_orm||jsonb_build_object('record_exists', true, 'columns_changed', array[]::text[]));" "\n" \
+	"end; $$;"
+
+#define SQL_PROCEDURE$ORM_RECORD_SET_VALUE \
+	"create or replace procedure pgorm.orm_record_set_value(inout orm_record jsonb, column_ name, value anyelement) language plpgsql as $$" "\n" \
+	"begin" "\n" \
+	"  if orm_record is null then return; end if;" "\n" \
+	"  if not (orm_record ? '#orm' ) then raise exception 'Record JSON does not contain key ''#orm'''; end if;" "\n" \
+	"  orm_record := jsonb_set(orm_record, array[column_], to_jsonb(value));" "\n" \
+	"  if not (orm_record->'#orm'->'columns_changed' ? column_) then" "\n" \
+	"    orm_record := jsonb_set(orm_record, array['#orm','columns_changed'], (orm_record->'#orm'->'columns_changed')||to_jsonb(column_));" "\n" \
+	"  end if;" "\n" \
+	"end; $$;"
+
 #define SQL_FUNCTION$ORM_RELATION_FN_UPDATE \
 	"create or replace function pgorm.orm_relation_fn_update() returns trigger language plpgsql security definer as $$" "\n" \
 	"begin" "\n" \
@@ -368,6 +402,8 @@ const char *SQL_LIST[] = {
 	SQL_PROCEDURE$ORM_RELATION_ENABLE_SIMPLE,
 	SQL_PROCEDURE$ORM_RELATION_DISABLE,
 	SQL_PROCEDURE$ORM_RELATION_DISABLE_SIMPLE,
+	SQL_PROCEDURE$ORM_RECORD_SAVE,
+	SQL_PROCEDURE$ORM_RECORD_SET_VALUE,
 	SQL_FUNCTION$ORM_RELATION_FN_UPDATE,
     SQL_FUNCTION$ORM_RELATION_COLUMN_FN_UPDATE,
 	SQL_FUNCTION$ORM_TABLE_FKEY_FN_UPDATE,

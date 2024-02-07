@@ -35,9 +35,27 @@ int str_copy(char *dest, int dest_size, char *source) {
 	int source_len = strlen(source);
 	if (source_len>=dest_size)
 		return log_error(5, dest_size, source_len+1);
-	for(int i=0; i<=source_len; i++) {
+	for(int i=0; i<=source_len; i++)
 		dest[i] = source[i];
-	}
+	return 0;
+}
+
+int str_copy_more(char *dest, int dest_size, char *source) {
+	if(dest==NULL) return log_error(45, "dest", "str_copy_more");
+	if(source==NULL) return log_error(45, "source", "str_copy_more");
+	if (dest_size<10)
+		return log_error(5, dest_size, 10);
+	int source_len = strlen(source);
+	if (source_len>=dest_size) {
+		for(int i=0; i<dest_size-4; i++)
+			dest[i] = source[i];
+		dest[dest_size-4] = '.';
+		dest[dest_size-3] = '.';
+		dest[dest_size-2] = '.';
+		dest[dest_size-1] = 0;
+	} else
+		for(int i=0; i<=source_len; i++)
+			dest[i] = source[i];
 	return 0;
 }
 

@@ -106,61 +106,52 @@ int metadata_relation_load(metadata_relation *relation, PGconn *pg_conn, char *s
 		if (str_copy(column->type, sizeof(column->type), PQgetvalue(pg_result, i, 5))) break;
 		column->not_null = pg_str_to_bool(PQgetvalue(pg_result, i, 6));
 		if (str_copy(column->field_name, sizeof(column->field_name), PQgetvalue(pg_result, i, 7))) break;
-		void (*anyfunc)(void);
-		if (req_pgorm_response_add_value_func(&anyfunc, type_oid, column->name)) break;
-		column->js_value_func = column->array ? "jsArrayPrimitive" : "jsPrimitive";
-		column->pg_value_func = column->array ? "pgArrayPrimitive" : "pgPrimitive";
-		if (category=='N') {
-			column->field_type_primitive = "number";
-			column->field_type_object    = "Number";
-			column->sortable = !column->array;
+		column->field_type = "String";
+		char *js_value_func_suffix = "String";
+		char *pg_value_func_suffix = "Text";
+		if (!strcmp(column->type,"jsonpath")) {
+		} else if (category=='N') {
+			column->field_type = "Number";
+			js_value_func_suffix = "Number";
+			pg_value_func_suffix = "Numeric";
 		} else if (category=='B') {
-			column->field_type_primitive = "boolean";
-			column->field_type_object    = "Boolean";
-			column->sortable = !column->array;
-		} else if (category=='S' || !strcmp(column->type,"jsonpath")) {
-			column->field_type_primitive = "string";
-			column->field_type_object    = "String";
-		} else if (category=='D') {
-			column->field_type_primitive = NULL;
-			column->field_type_object    = "Date";
-			column->js_value_func           = column->array ? "jsArrayDate" : "jsDate";
-			if      (!strcmp(column->type,"date"))        column->pg_value_func = column->array ? "pgArrayDate"        : "pgDate";
-			else if (!strcmp(column->type,"time"))        column->pg_value_func = column->array ? "pgArrayTime"        : "pgTime";
-			else if (!strcmp(column->type,"timetz"))      column->pg_value_func = column->array ? "pgArrayTimetz"      : "pgTimetz";
-			else if (!strcmp(column->type,"timestamp"))   column->pg_value_func = column->array ? "pgArrayTimestamp"   : "pgTimestamp";
-			else if (!strcmp(column->type,"timestamptz")) column->pg_value_func = column->array ? "pgArrayTimestamptz" : "pgTimestamptz";
-			else {
-				log_error(71, column->type);
-				break;
-			}
+			column->field_type = "Boolean";
+			js_value_func_suffix = "Boolean";
+			pg_value_func_suffix = "Boolean";
+		} else if (!strcmp(column->type,"date") || !strcmp(column->type,"time") || !strcmp(column->type,"timetz") || !strcmp(column->type,"timestamp") || !strcmp(column->type,"timestamptz")) {
+			column->field_type = "Date";
+			js_value_func_suffix = "Date";
+			if      (!strcmp(column->type,"date"))      pg_value_func_suffix = "Date";
+			else if (!strcmp(column->type,"time"))      pg_value_func_suffix = "Time";
+			else if (!strcmp(column->type,"timetz"))    pg_value_func_suffix = "Timetz";
+			else if (!strcmp(column->type,"timestamp")) pg_value_func_suffix = "Timestamp";
+			else                                        pg_value_func_suffix = "Timestamptz";
 		} else if (!strcmp(column->type,"interval")) {
-			column->field_type_primitive = "number";
-			column->field_type_object    = "Number";
-			column->pg_value_func           = column->array ? "pgArrayInterval" : "pgInterval";
+			column->field_type = "Number";
+			js_value_func_suffix = "DateInterval";
+			pg_value_func_suffix = "Interval";
 		} else if (!strcmp(column->type,"bytea")) {
-			column->field_type_primitive = NULL;
-			column->field_type_object    = "Uint8Array";
-			column->js_value_func           = column->array ? "jsArrayUint8Array" : "jsUint8Array";
-			column->pg_value_func           = column->array ? "pgArrayBytea" : "pgBytea";
+			column->field_type = "Uint8Array";
+			js_value_func_suffix = "Uint8Array";
+			pg_value_func_suffix = "Bytea";
 		} else if (!strcmp(column->type,"json") || !strcmp(column->type,"jsonb")) {
-			column->field_type_primitive = NULL;
-			column->field_type_object    = "Object";
-			column->js_value_func           = column->array ? "jsArrayPrimitive" : "jsPrimitive";
-			column->pg_value_func           = column->array ? "pgArrayJSON"      : "pgJSON";
+			column->field_type = "Object";
+			js_value_func_suffix = "Object";
+			pg_value_func_suffix = "JSON";
 		} else if (!strcmp(column->type,"xml")) {
-			column->field_type_primitive = NULL;
-			column->field_type_object    = "XMLDocument";
-			column->js_value_func           = column->array ? "jsArrayXML" : "jsXMLDocument";
-			column->pg_value_func           = column->array ? "pgArrayXML" : "pgXML";
-		} else {
-			log_error(71, column->type);
-			break;
+			column->field_type = "XMLDocument";
+			js_value_func_suffix = "XMLDocument";
+			pg_value_func_suffix = "XML";
 		}
+		column->js_value_func[0] = 0;
+		if (str_add(column->js_value_func, sizeof(column->js_value_func), "js", column->array ? "Array" : "", js_value_func_suffix, NULL)) break;
+		column->pg_value_func[0] = 0;
+		if (str_add(column->pg_value_func, sizeof(column->pg_value_func), "pg", column->array ? "Array" : "", pg_value_func_suffix, NULL)) break;
 		column->validate_value_func[0] = 0;
-		if (str_add(column->validate_value_func, sizeof(column->validate_value_func), "validate", column->array ? "Array" : "", column->field_type_object, NULL)) break;
-		column->sortable = !column->array && (!strcmp(column->field_type_object,"Number") || !strcmp(column->field_type_object,"String") || !strcmp(column->field_type_object,"Boolean") || !strcmp(column->field_type_object,"Date"));
+		if (str_add(column->validate_value_func, sizeof(column->validate_value_func), "validate", column->array ? "Array" : "", column->field_type, NULL)) break;
+		column->sortable = !column->array && (!strcmp(column->field_type,"Number") || !strcmp(column->field_type,"String") || !strcmp(column->field_type,"Boolean") || !strcmp(column->field_type,"Date"));
 	}
+
 	PQclear(pg_result);
 	if (i!=relation->columns_len) return 1;
 	if (str_add(relation->attnum_list, sizeof(relation->attnum_list), "}", NULL)) return 1;
@@ -268,29 +259,27 @@ int metadata_relation_load(metadata_relation *relation, PGconn *pg_conn, char *s
 	relation->relationships_class_name_len_max = UTILS_MAX(relation->parents_parent_class_name_len_max,relation->children_child_class_name_len_max);
 	relation->field_relation_name_len_max = UTILS_MAX(relation->parents_field_parent_name_len_max,relation->children_field_child_name_len_max);
 	//
-	relation->field_name_len_max             = 0;
-	relation->field_type_primitive_len_max   = 0;
-	relation->field_type_object_len_max      = 0;
-	relation->col_name_len_max               = 0;
-	relation->col_type_len_max               = 0;
-	relation->js_value_func_len_max          = 0;
-	relation->pg_value_func_len_max          = 0;
-	relation->validate_value_func_len_max    = 0;
-	relation->sort_field_name_len_max        = -1;
-	relation->sort_field_type_object_len_max = -1;
+	relation->field_name_len_max          = 0;
+	relation->field_type_len_max          = 0;
+	relation->col_name_len_max            = 0;
+	relation->col_type_len_max            = 0;
+	relation->js_value_func_len_max       = 0;
+	relation->pg_value_func_len_max       = 0;
+	relation->validate_value_func_len_max = 0;
+	relation->sort_field_name_len_max     = -1;
+	relation->sort_field_type_len_max     = -1;
 	for(int i=0; i<relation->columns_len; i++) {
 		metadata_column *column = &relation->columns[i];
-		str_len_max(&relation->field_name_len_max,           column->field_name);
-		str_len_max(&relation->field_type_primitive_len_max, column->field_type_primitive!=NULL ? column->field_type_primitive : "null");
-		str_len_max(&relation->field_type_object_len_max,    column->field_type_object);
-		str_len_max(&relation->col_name_len_max,             column->name);
-		str_len_max(&relation->col_type_len_max,             column->type);
-		str_len_max(&relation->js_value_func_len_max,        column->js_value_func);
-		str_len_max(&relation->pg_value_func_len_max,        column->pg_value_func);
-		str_len_max(&relation->validate_value_func_len_max,  column->validate_value_func);
+		str_len_max(&relation->field_name_len_max,          column->field_name);
+		str_len_max(&relation->field_type_len_max,          column->field_type);
+		str_len_max(&relation->col_name_len_max,            column->name);
+		str_len_max(&relation->col_type_len_max,            column->type);
+		str_len_max(&relation->js_value_func_len_max,       column->js_value_func);
+		str_len_max(&relation->pg_value_func_len_max,       column->pg_value_func);
+		str_len_max(&relation->validate_value_func_len_max, column->validate_value_func);
 		if (column->sortable) {
-			str_len_max(&relation->sort_field_name_len_max,        column->field_name);
-			str_len_max(&relation->sort_field_type_object_len_max, column->field_type_object);
+			str_len_max(&relation->sort_field_name_len_max, column->field_name);
+			str_len_max(&relation->sort_field_type_len_max, column->field_type);
 		}
 	}
 	relation->columns_len_digits = 0;

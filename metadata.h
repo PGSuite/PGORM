@@ -9,12 +9,11 @@ typedef struct {
 	int  not_null;
 	//
 	char field_name[128];
-	char *field_type_primitive;
-	char *field_type_object;
+	char *field_type;
 	int sortable;
 	//
-	char *js_value_func;
-	char *pg_value_func;
+	char js_value_func[32];
+	char pg_value_func[32];
 	char validate_value_func[128];
 } metadata_column;
 
@@ -62,15 +61,14 @@ typedef struct {
 	int indexes_len;
 	//
 	int field_name_len_max;
-	int field_type_primitive_len_max;
-	int field_type_object_len_max;
+	int field_type_len_max;
 	int col_name_len_max;
 	int col_type_len_max;
 	int js_value_func_len_max;
 	int pg_value_func_len_max;
 	int validate_value_func_len_max;
 	int sort_field_name_len_max;
-	int sort_field_type_object_len_max;
+	int sort_field_type_len_max;
 	int parents_field_parent_name_len_max;
 	int parents_parent_table_schema_len_max;
 	int parents_parent_table_name_len_max;

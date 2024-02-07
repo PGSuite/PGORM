@@ -31,11 +31,12 @@ char HELP[] =
 	"  stop       stop pgorm\n" \
 	"\n" \
 	"Database options:\n" \
-	"  -h HOSTNAME        database server host (default: " DB_PORT_DEFAULT ")\n" \
-	"  -p PORT            database server port (default: " DB_HOST_DEFAULT ")\n" \
+	"  -h HOSTNAME        database server host (default: server ip address)\n" \
+	"  -p PORT            database server port (default: " DB_PORT_DEFAULT ")\n" \
 	"  -d DBNAME          database name (default: " DB_NAME_DEFAULT ")\n" \
-	"  -U USERNAME        superuser name (default: " DB_ORM_USER_DEFAULT ")\n" \
-	"  -W PASSWORD        superuser password in PostgreSQL (if nessesary)\n" \
+	"  -orm-h HOSTNAME    ORM hostname (default: " DB_ORM_HOST_DEFAULT " or server ip address)\n" \
+	"  -orm-u USERNAME    ORM username (default: " DB_ORM_USER_DEFAULT ")\n" \
+	"  -orm-w PASSWORD    ORM password (if nessesary)\n" \
 	"\n" \
 	"HTTP options:\n" \
 	"  -hd DIRECTORY       site directory (default: " HTTP_DIRECTORY_DEFAULT ")\n" \
@@ -59,6 +60,9 @@ int main(int argc, char *argv[]) {
 	log_set_program_name("PGORM is web server for database PostgreSQL", "PGORM");
 
 	log_check_help(argc, argv, HELP);
+
+	if (tcp_startup()>0)
+		log_exit_fatal();
 
 	if (!strcmp(argv[1],"start")) {
 
@@ -129,6 +133,7 @@ int main(int argc, char *argv[]) {
 
 	char *db_orm_user_password  = NULL;
 
+	db_port    = DB_PORT_DEFAULT;
 	http_port  = atoi(HTTP_PORT_DEFAULT);
 	admin_port = atoi(ADMIN_PORT_DEFAULT);
 
@@ -145,8 +150,9 @@ int main(int argc, char *argv[]) {
 		if (strcmp(argv[i],"-h")==0) db_host=argv[++i];
 		else if (strcmp(argv[i],"-p")==0) db_port=argv[++i];
 		else if (strcmp(argv[i],"-d")==0) db_name=argv[++i];
-		else if (strcmp(argv[i],"-U")==0) db_orm_user=argv[++i];
-		else if (strcmp(argv[i],"-W")==0) db_orm_user_password=argv[++i];
+		else if (strcmp(argv[i],"-orm-h")==0) db_orm_host=argv[++i];
+		else if (strcmp(argv[i],"-orm-u")==0) db_orm_user=argv[++i];
+		else if (strcmp(argv[i],"-orm-w")==0) db_orm_user_password=argv[++i];
 		else if (strcmp(argv[i],"-hd")==0) http_directory = argv[++i];
 		else if (strcmp(argv[i],"-hp")==0) {
 			http_port = atoi(argv[++i]);
@@ -167,11 +173,11 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-    if ( pg_uri_build(db_orm_uri, sizeof(db_orm_uri), db_host, db_port, db_name, db_orm_user, db_orm_user_password) )
-    	exit(3);
+    if (db_host==NULL) db_host = tcp_host_addr[0]!=0 ? tcp_host_addr : DB_ORM_HOST_DEFAULT;
+    if (db_orm_host==NULL) db_orm_host = !strcmp(db_host,tcp_host_addr) ? DB_ORM_HOST_DEFAULT : db_host;
 
-    if (db_host==NULL) db_host = DB_HOST_DEFAULT;
-    if (db_port==NULL) db_port = DB_PORT_DEFAULT;
+    if ( pg_uri_build(db_orm_uri, sizeof(db_orm_uri), db_orm_host, db_port, db_name, db_orm_user, db_orm_user_password) )
+    	exit(3);
 
 	if (log_file!=NULL) log_set_file(log_file);
 
@@ -181,10 +187,9 @@ int main(int argc, char *argv[]) {
 	if (log_get_header(header, sizeof(header)) || globals_add_parameters(header, sizeof(header))) exit(2);
     log_info("%s", header);
 
-	// pgorm_test();
+    if (!strcmp(db_host, DB_ORM_HOST_DEFAULT)) log_warn(904);
 
-	if (tcp_startup())
-		log_exit_fatal();
+	// pgorm_test();
 
 	if (thread_create(admin_server, "ADMIN", NULL))
 		log_exit_fatal();

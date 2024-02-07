@@ -20,7 +20,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 	char line1[32*1024],line2[32*1024],line3[32*1024];
 	int res;
 	if (stream_add_str(module_base_src, "// Module made automatically based on relation (table or view definition) and cannot be edited\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "import { Relation,Column,Row,RowArray,Relationship,ORMConnection,ORMUtil,ORMError } from \"/orm/pgorm-db.js\"\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "import { Relation,Column,Record,RecordArray,Relationship,ORMConnection,ORMUtil,ORMError } from \"/orm/pgorm-db.js\"\n\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "import { ", relation->class_name, ",", relation->class_name, "Array } from \"/orm/", relation->schema, "/", relation->class_name, ".js\"\n\n", NULL)) return 1;
 	if (relation->parents_len>0 || relation->children_len>0) {
 		if (stream_add_str(module_base_src, "// Import classes by relationship\n", NULL)) return 1;
@@ -50,7 +50,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 		}
 		if (stream_add_str(module_base_src, "\n", NULL)) return 1;
 	}
-	if (stream_add_str(module_base_src, "export class Base", relation->class_name, " extends Row {\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "export class Base", relation->class_name, " extends Record {\n\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    // Columns\n", NULL)) return 1;
 	if (pg_select(&pg_result, pg_conn, 1, SQL_COLUMN_COMMENTS, 2, relation->attnum_list, relation->oid)) return 1;
 	int i;
@@ -60,13 +60,9 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 		if (stream_add_rpad(module_base_src, "\"", relation->columns[i].type, relation->col_type_len_max, "\", ")) break;
 		if (stream_add_rpad(module_base_src, "", (relation->columns[i].array ? "true" : "false"), 5, ", ")) break;
 		if (stream_add_rpad(module_base_src, "\"", relation->columns[i].field_name, relation->field_name_len_max, "\", ")) break;
-		if (relation->columns[i].field_type_primitive!=NULL) {
-			if (stream_add_rpad(module_base_src, "\"", relation->columns[i].field_type_primitive, relation->field_type_primitive_len_max, "\", ")) break;
-		} else
-			if (stream_add_rpad(module_base_src, "", "null", relation->field_type_primitive_len_max, ",   ")) break;
-		if (stream_add_rpad(module_base_src, "", relation->columns[i].field_type_object, relation->field_type_object_len_max, ", ")) break;
+		if (stream_add_rpad(module_base_src, "", relation->columns[i].field_type, relation->field_type_len_max, ", ")) break;
 		if (stream_add_rpad(module_base_src, "", (relation->columns[i].not_null ? "true" : "false"), 5, ", ")) break;
-		if (stream_add_str(module_base_src, "Base", relation->class_name, ".getRowClass, ", NULL)) break;
+		if (stream_add_str(module_base_src, "function() { return ", relation->class_name, "; }, ", NULL)) break;
 		if (stream_add_rpad(module_base_src, "ORMUtil.", relation->columns[i].validate_value_func, relation->validate_value_func_len_max, ", ")) break;
 		if (stream_add_rpad(module_base_src, "ORMUtil.", relation->columns[i].js_value_func, relation->js_value_func_len_max, ", ")) break;
 		if (stream_add_rpad(module_base_src, "ORMUtil.", relation->columns[i].pg_value_func, relation->pg_value_func_len_max, ", ")) break;
@@ -151,7 +147,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 	if (stream_add_str(module_base_src, "], function() { return ", relation->class_name, "; }, function() { return ", relation->class_name, "Array; }, ", NULL)) return 1;
 	if (stream_add_str(module_base_src, "[", line1, "], function() { return [", line2, "]; });\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    static getRelation() { return Base", relation->class_name, ".#relation; }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Row fields\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Record fields\n", NULL)) return 1;
 	for(int i=0; i<relation->columns_len; i++) {
 		if (stream_add_rpad(module_base_src, "    #", relation->columns[i].field_name, relation->field_name_len_max, ""))  return 1;
 		if (stream_add_rpad(module_base_src, " = null; #", relation->columns[i].field_name, relation->field_name_len_max, "$changed"))  return 1;
@@ -225,7 +221,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			metadata_relationship *parent = &relation->parents[i];
 			if (stream_add_str(module_base_src, "    set", parent->field_parent_name, "(value) {\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        if (!(value instanceof ", parent->parent_class_name, ")) throw new ORMError(303, `Value ${ORMUtil._valueToStringShort(value)} is not ", parent->parent_class_name, "`);\n", NULL)) return 1;
-			if (stream_add_str(module_base_src, "        if (value!==null && !value.isRowExists()) throw new ORMError(302, `Object \"", parent->parent_class_name, "\" not saved in database`);\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (value!==null && !value.isRecordExists()) throw new ORMError(302, `Object \"", parent->parent_class_name, "\" not saved in database`);\n", NULL)) return 1;
 			for(int j=0; j<parent->child_fields.len; j++) {
 				if (stream_add_str(module_base_src, "        this.set", parent->child_fields.values[j], "(value!==null ? ", NULL)) return 1;
 			    if (stream_add_str(module_base_src, "value.get", parent->parent_fields.values[j], "() : null);\n", NULL)) return 1;
@@ -250,7 +246,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 		for(int i=0; i<relation->children_len; i++) {
 			metadata_relationship *child = &relation->children[i];
 			if (stream_add_str(module_base_src, "    get", child->field_child_name, "Array(connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
-			if (stream_add_str(module_base_src, "        if (!this.isRowExists()) throw new ORMError(302, \"Object not saved in database\");\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (!this.isRecordExists()) throw new ORMError(302, \"Object not saved in database\");\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        if (this.#", child->field_child_name, "Array$assigned) return this.#", child->field_child_name, "Array;\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array = ", child->child_class_name, "Array.load(\"", NULL)) return 1;
 			for(int j=0; j<child->child_columns.len; j++) {
@@ -276,7 +272,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (stream_add_str(module_base_src, "        if (child===null) throw new ORMError(309, \"Child is null\");\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        if (!(child instanceof ", child->child_class_name, ")) throw new ORMError(303, `Value ${ORMUtil._valueToStringShort(value)} is not ", child->child_class_name, "`);\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        this.get", child->field_child_name, "Array(connection);\n", NULL)) return 1;
-			if (stream_add_str(module_base_src, "        if (!child.isRowExists()) {\n", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        if (!child.isRecordExists()) {\n", NULL)) return 1;
 			for(int j=0; j<child->child_columns.len; j++)
 				if (stream_add_str(module_base_src, "            if (!child.isChanged", child->child_fields.values[j], "()) child.set", child->child_fields.values[j], "(this.#", child->parent_fields.values[j], ");\n", NULL)) return 1;
 			if (child->child_field_sort_pos[0]!=0)
@@ -300,13 +296,13 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 	}
 	line1[0]=0;
 	if (str_add(line1, sizeof(line1), "throw new ORMError(310, `Relation \"", relation->schema, ".", relation->name, "\" does not have primary key`);", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Save row and get values (SQL statement: insert or update with returning)\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Save record and get values (SQL statement: insert or update with returning)\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    save(connection = ORMConnection.getDefault()) { ", relation->columns_pkey_len>0 ? "return super.save(connection);" : line1, " }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Delete row and get values (SQL statement: delete with returning)\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Delete record and get values (SQL statement: delete with returning)\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    delete(connection = ORMConnection.getDefault()) { ", relation->columns_pkey_len>0 ? "super.delete(connection);" : line1, " }\n\n", NULL)) return 1;
 	if (relation->columns_pkey_len>0) {
-		if (stream_add_str(module_base_src, "    // Load one row by condition (SQL statement: select where [condition])\n", NULL)) return 1;
-		if (stream_add_str(module_base_src, "    static loadWhere(condition, params = null, connection = ORMConnection.getDefault()) { return Row.loadWhere(", relation->class_name, ", connection, condition, params); }\n\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    // Load one record by condition (SQL statement: select where [condition])\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    static loadWhere(condition, params = null, connection = ORMConnection.getDefault()) { return Record.loadWhere(", relation->class_name, ", connection, condition, params); }\n\n", NULL)) return 1;
 	}
 	if (relation->columns_pkey_len>0) {
 		line1[0] = 0; line2[0] = 0;
@@ -316,7 +312,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (str_add(line1, sizeof(line1), i>0 ? " and " : "", relation->columns[relation->columns_pkey[i]].name, "=", param, NULL)) return 1;
 			if (str_add(line2, sizeof(line2), i>0 ? ", " : "", relation->columns[relation->columns_pkey[i]].field_name, NULL)) return 1;
 		}
-		if (stream_add_str(module_base_src, "    // Load row by primary key\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    // Load record by primary key\n", NULL)) return 1;
 		if (stream_add_str(module_base_src, "    static load(", line2, ", connection = ORMConnection.getDefault()) { return ", relation->class_name, ".loadWhere(\"", line1, "\", [", line2, "], connection); }\n\n", NULL)) return 1;
 	}
 	for(int i=0; i<relation->indexes_len; i++) {
@@ -328,19 +324,34 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (str_add(line1, sizeof(line1), j>0 ? ", " : "", relation->columns[relation->indexes[i].columns[j]].field_name, NULL)) return 1;
 			if (str_add(line2, sizeof(line2), j>0 ? " and " : "", relation->columns[relation->indexes[i].columns[j]].name, "=", variable, NULL)) return 1;
 		}
-		if (stream_add_str(module_base_src, "    // Load row by unique index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    // Load record by unique index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
 		if (stream_add_str(module_base_src, "    static loadUnique",relation->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", relation->class_name, ".loadWhere(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
 	}
-	if (stream_add_str(module_base_src, "    // Initialize field values fetched from database\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    _initialize(pgValues, rowExists) {\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Create from postgres record\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static fromRecord(pgRecord) { return super.fromRecord(", relation->class_name, ", pgRecord); }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Create from JSON\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static fromJSON(json) { return super.fromJSON(", relation->class_name, ", json); }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Initialize field values\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    _initialize(pgValues, valuesChanged, recordExists) {\n", NULL)) return 1;
 	for(int i=0; i<relation->columns_len; i++) {
 		sprintf(line1, "%*d", relation->columns_len_digits, i);
 		if (stream_add_rpad(module_base_src, "        this.#", relation->columns[i].field_name, relation->field_name_len_max, "")) return 1;
 		if (stream_add_rpad(module_base_src, " = ORMUtil.", relation->columns[i].js_value_func, relation->js_value_func_len_max, "")) return 1;
-		if (stream_add_str(module_base_src, "(pgValues[", line1, "]); ", NULL)) return 1;
-		if (stream_add_rpad(module_base_src, "this.#", relation->columns[i].field_name, relation->field_name_len_max, "$changed")) return 1;
+		if (stream_add_str(module_base_src, "(pgValues[", line1, "]);\n", NULL)) return 1;
+	}
+	if (stream_add_str(module_base_src, "        if (valuesChanged!==null) {\n", NULL)) return 1;
+	for(int i=0; i<relation->columns_len; i++) {
+		sprintf(line1, "%*d", relation->columns_len_digits, i);
+		if (stream_add_rpad(module_base_src, "            this.#", relation->columns[i].field_name, relation->field_name_len_max, "$changed")) return 1;
+		if (stream_add_str(module_base_src, " = valuesChanged[", line1, "];\n", NULL)) return 1;
+	}
+	if (stream_add_str(module_base_src, "        } else {\n", NULL)) return 1;
+	for(int i=0; i<relation->columns_len; i++) {
+		sprintf(line1, "%*d", relation->columns_len_digits, i);
+		if (stream_add_rpad(module_base_src, "            this.#", relation->columns[i].field_name, relation->field_name_len_max, "$changed")) return 1;
 		if (stream_add_str(module_base_src, " = false;\n", NULL)) return 1;
 	}
+	if (stream_add_str(module_base_src, "        }\n", NULL)) return 1;
 	for(int i=0; i<relation->parents_len; i++) {
 		metadata_relationship *parent = &relation->parents[i];
 		if (stream_add_rpad(module_base_src, "        this.#", parent->field_parent_name, relation->parents_field_parent_name_len_max, ""))  return 1;
@@ -348,18 +359,18 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 		if (stream_add_rpad(module_base_src, " this.#", parent->field_parent_name, relation->parents_field_parent_name_len_max, "$assigned"))  return 1;
 		if (stream_add_str(module_base_src, " = false;\n", NULL)) return 1;
 	}
-	if (stream_add_str(module_base_src, "        return super._initialize(rowExists);\n    }\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "        return super._initialize(recordExists);\n    }\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "\n}\n\n", NULL)) return 1;
 	//
-	if (stream_add_str(module_base_src, "export class Base", relation->class_name, "Array extends RowArray {\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "export class Base", relation->class_name, "Array extends RecordArray {\n\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    // Get relation\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    static getRelation() { return Base", relation->class_name, ".getRelation(); }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Load any rows by condition (SQL statement: select where [condition])\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // If there is no condition, all rows load\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static load(condition = null, params = null, connection = ORMConnection.getDefault()) { return RowArray.load(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Delete any rows by condition (SQL statement: select where [condition])\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // If there is no condition, all rows deleted\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static delete(condition = null, params = null, connection = ORMConnection.getDefault()) { return RowArray.delete(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Load any records by condition (SQL statement: select where [condition])\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // If there is no condition, all records load\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static load(condition = null, params = null, connection = ORMConnection.getDefault()) { return RecordArray.load(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Delete any records by condition (SQL statement: select where [condition])\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // If there is no condition, all records deleted\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static delete(condition = null, params = null, connection = ORMConnection.getDefault()) { return RecordArray.delete(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
 	for(int i=0; i<relation->indexes_len; i++) {
 		if (relation->indexes[i].unuque) continue;
 		line1[0] = 0;
@@ -370,7 +381,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (str_add(line1, sizeof(line1), j>0 ? ", " : "", relation->columns[relation->indexes[i].columns[j]].field_name, NULL)) return 1;
 			if (str_add(line2, sizeof(line2), j>0 ? " and " : "", relation->columns[relation->indexes[i].columns[j]].name, "=", variable, NULL)) return 1;
 		}
-		if (stream_add_str(module_base_src, "    // Load rows by index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    // Load records by index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
 		if (stream_add_str(module_base_src, "    static loadByIndex",relation->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", relation->class_name, "Array.load(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
 	}
 	if (relation->sort_field_name_len_max!=-1) {
@@ -379,9 +390,9 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			metadata_column *column = &relation->columns[i];
 			if (!column->sortable) continue;
 			if (stream_add_rpad(module_base_src, "    sortBy", column->field_name, relation->sort_field_name_len_max, "")) return 1;
-			if (stream_add_rpad(module_base_src, "(desc = false, nullsFirst = false) { this.sort( (row1,row2) => ORMUtil.compare", column->field_type_object, relation->sort_field_type_object_len_max, "")) return 1;
-			if (stream_add_rpad(module_base_src, "(row1.get", column->field_name, relation->sort_field_name_len_max, "(), ")) return 1;
-			if (stream_add_rpad(module_base_src, "row2.get", column->field_name, relation->sort_field_name_len_max, "(), ")) return 1;
+			if (stream_add_rpad(module_base_src, "(desc = false, nullsFirst = false) { this.sort( (record1,record2) => ORMUtil.compare", column->field_type, relation->sort_field_type_len_max, "")) return 1;
+			if (stream_add_rpad(module_base_src, "(record1.get", column->field_name, relation->sort_field_name_len_max, "(), ")) return 1;
+			if (stream_add_rpad(module_base_src, "record2.get", column->field_name, relation->sort_field_name_len_max, "(), ")) return 1;
 			if (stream_add_str(module_base_src,  "desc, nullsFirst) ); return this; }\n", NULL)) return 1;
 		}
 		if (stream_add_str(module_base_src, "\n", NULL)) return 1;
