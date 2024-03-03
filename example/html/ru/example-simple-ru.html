@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>  <meta charset="utf-8"> <title>PGORM | Простой пример</title> </head>
+<body> 
+
+<button id="buttonCreateInvoice">Создать накладную</button> <br><br>
+
+Результат
+<div id="result" style="border: 1px solid black; width: 500px; height: 200px;"></div>
+
+<script type="module">
+
+// Импортируем классы подключения и таблицы Invoice из автоматически созданных модулей
+import { ORMConnection } from "/orm/pgorm-db.js";
+import { Invoice }       from "/orm/public/Invoice.js";
+
+function createInvoice() {
+  try {
+    // Создаем подключение, подключаемся к базе данных и устанавливаем данное подключение по умолчанию
+    new ORMConnection().connect('user_1', 'user_1').setDefault();
+    // Создаем объект класса Invoice
+    let invoice = new Invoice();
+    // Устанавливаем значения полей
+    invoice.setNumber('12/34');
+    invoice.setAmount(567.89);
+    // Сохраняем объект, после сохранения автозаполняемые поля будут содержать значения
+    invoice.save();
+    // Показываем объект
+    document.getElementById("result").innerHTML = "Накладная<br><br>" +
+      "ID: "     + invoice.getID() + "<br>" +
+      "Date: "   + invoice.getDate().toISOString() + "<br>" +
+      "Number: " + invoice.getNumber() +"<br>" +
+      "Amount: " + invoice.getAmount();
+    // Отключаемся от базы данных
+    ORMConnection.getDefault().disconnect();
+  } catch (exception) {
+    // При возникновении исключения показываем его
+    document.getElementById("result").innerHTML = "Ошибка<br><br>"+exception.message;
+  }
+}
+
+document.getElementById("buttonCreateInvoice").addEventListener("click", createInvoice);
+
+</script>
+
+</body>
+</html>

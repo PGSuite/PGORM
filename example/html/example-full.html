@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>  
+  <meta charset="utf-8">
+  <title>PGORM | Full example</title> 
+  <style> 
+    div { border: 1px solid black; width: 500px; max-width: 500px; margin-bottom: 20px; word-wrap: break-word; padding: 5px; }
+  </style>
+</head>
+
+<body> 
+
+<div id="Error" style="display: none; border: 3px solid red;"></div>
+
+Customer.ID                             <div id="CustomerID"></div>
+Invoice                                 <div id="Invoice"></div>
+Invoice.Customer - parent               <div id="InvoiceCustomer"></div>
+Invoice.InvoiceProductArray - children  <div id="InvoiceProductArray"></div>
+power_3(2)                              <div id="Power3"></div>
+Invoice IDs                             <div id="InvoiceIDs"></div>
+
+<script type="module">
+
+// Import class for connect yo database
+import { ORMConnection } from "/orm/pgorm-db.js";
+// Import ORM classes
+import { Customer,       CustomerArray }       from "/orm/example/Customer.js";
+import { Invoice,        InvoiceArray }        from "/orm/example/Invoice.js";
+import { InvoiceProduct, InvoiceProductArray } from "/orm/example/InvoiceProduct.js";
+
+try {
+  // Connect to database	
+  new ORMConnection().connect("user_1", "password_1").setDefault();
+  //
+  // Create object customer, set name and save 
+  var customer = new Customer().setName("Horns and hooves").save();
+  // Show customer ID that was assigned when object was saved
+  document.getElementById("CustomerID").innerHTML = customer.getID();
+  //
+  // Create object invoice, set customer as parent object, fields, save, add two children
+  var invoice = new Invoice().setCustomer(customer).setNumber("12/34").setAmount(567.89).save();
+  invoice.addInvoiceProduct(new InvoiceProduct().setProductName("Pensil").setQuantity(3));
+  invoice.addInvoiceProduct(new InvoiceProduct().setProductName("Eraser").setQuantity(5));
+  // Show invoice object and its relations
+  document.getElementById("Invoice").innerHTML = JSON.stringify(invoice);
+  document.getElementById("InvoiceCustomer").innerHTML = JSON.stringify(invoice.getCustomer());
+  document.getElementById("InvoiceProductArray").innerHTML = JSON.stringify(invoice.getInvoiceProductArray());
+  // Select and show result of function example.power_3
+  document.getElementById("Power3").innerHTML = ORMConnection.getDefault().execute("select example.power_3($1)", [2]).data[0][0];
+  //
+  // Call functions example.add_invoice with ORM parameters, convert result to ORM object, all records are saved in one transaction
+  // Parameters
+  var invoiceNew = new Invoice().setNumber("12/34").setAmount(567.89);
+  var invoiceProductsNew = new InvoiceProductArray(); 
+  invoiceProductsNew.push( new InvoiceProduct().setProductName("Pensil").setQuantity(3) );
+  invoiceProductsNew.push( new InvoiceProduct().setProductName("Eraser").setQuantity(5) );
+  // Variant 1: parameters - ORM objects, result - postgres record
+  var invoice1Record = ORMConnection.getDefault().execute("select example.add_invoice_v1($1, $2);", [invoiceNew,invoiceProductsNew]).data[0][0]; 
+  var invoice1 = Invoice.fromRecord(invoice1Record);
+  // Variant 2: parameter - ORM objects as one common json, result - postgres record
+  var invoice2Record = ORMConnection.getDefault().execute("select example.add_invoice_v2($1);", { invoice: invoiceNew, invoice_product_array: invoiceProductsNew }).data[0][0];
+  let invoice2 = Invoice.fromRecord(invoice2Record);
+  // Variant 3: parameters - ORM objects as JSONs, result - record as JSON
+  var invoice3JSON = ORMConnection.getDefault().execute("select example.add_invoice_v3($1, $2);", [invoiceNew.toJSON(),invoiceProductsNew.toArrayJSON()]).data[0][0]; 
+  let invoice3 = Invoice.fromJSON(invoice3JSON);
+  // Show results
+  document.getElementById("InvoiceIDs").innerHTML = invoice1.getID()+","+invoice2.getID()+","+invoice3.getID();
+  //
+  // Disconnect from database	
+  ORMConnection.getDefault().disconnect();
+} catch (exception) {
+  // View exception
+  document.getElementById("Error").innerHTML = "<b>ERROR</b><br><br>"+exception.message;
+  document.getElementById("Error").style.display = '';
+}
+
+</script>
+
+</body>
+</html>

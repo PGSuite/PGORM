@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>  <meta charset="utf-8"> <title>PGORM | Simple example</title> </head>
+<body> 
+
+<button id="buttonCreateInvoice">Create invoice</button> <br><br>
+
+Result
+<div id="result" style="border: 1px solid black; width: 500px; height: 200px;"></div>
+
+<script type="module">
+
+// Import class for connect to database
+import { ORMConnection } from "/orm/pgorm-db.js";
+// Import class Invoice from automatically generated module
+import { Invoice }       from "/orm/public/Invoice.js";
+
+function createInvoice() {
+  try {
+    // Create connection, connect to database and set this connection by default
+    new ORMConnection().connect('user_1', 'user_1').setDefault();
+    // Create object of class Invoice
+    let invoice = new Invoice();
+    // Set field values
+    invoice.setNumber('12/34');
+    invoice.setAmount(567.89);
+    // Save object, after save autocomplete fields will contain values
+    invoice.save();
+    // Show object
+    document.getElementById("result").innerHTML = "Накладная<br><br>" +
+      "ID: "     + invoice.getID() + "<br>" +
+      "Date: "   + invoice.getDate().toISOString() + "<br>" +
+      "Number: " + invoice.getNumber() +"<br>" +
+      "Amount: " + invoice.getAmount();
+    // Disconnect from database
+    ORMConnection.getDefault().disconnect();
+  } catch (exception) {
+    // If exception occurs, show it
+    document.getElementById("result").innerHTML = "Ошибка<br><br>"+exception.message;
+  }
+}
+
+document.getElementById("buttonCreateInvoice").addEventListener("click", createInvoice);
+
+</script>
+
+</body>
+</html>
