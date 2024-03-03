@@ -333,29 +333,33 @@
 	"  return null;" "\n" \
 	"end; $$"
 
-#define SQL_FUNCTION$EVENT_FN_ALTER_TABLE \
-	"create or replace function pgorm.event_fn_alter_table() returns event_trigger language plpgsql security definer as $$" "\n" \
+#define SQL_FUNCTION$EVENT_FN_ALTER_RELATION \
+	"create or replace function pgorm.event_fn_alter_relation() returns event_trigger language plpgsql security definer as $$" "\n" \
 	"declare" "\n" \
 	"  rec record;" "\n" \
 	"begin" "\n" \
 	"  for rec in (" "\n" \
-	"    select t.schema,t.name" "\n" \
+	"    select r.schema,r.name,r.type" "\n" \
 	"      from pg_event_trigger_ddl_commands() e" "\n" \
-	"      join pg_class c on c.oid=e.objid" "\n" \
-	"      join pgorm.orm_relation t on t.schema=e.schema_name and t.name=c.relname and t.type='table'" "\n" \
-	"      where e.object_type in ('table','table column')" "\n" \
+	"      join pg_class c on (e.object_type in ('table','table column','view') and c.oid=e.objid)" "\n" \
+	"                      or (e.object_type in ('index') and c.oid in (select indrelid from pg_index where indexrelid=e.objid))" "\n" \
+	"      join pgorm.orm_relation r on r.schema=e.schema_name and r.name=c.relname" "\n" \
 	"   ) loop" "\n" \
-	"     call pgorm.orm_table_column_refresh(rec.schema,rec.table_name);" "\n" \
-	"     call pgorm.orm_table_fkey_refresh(rec.schema,rec.table_name);" "\n" \
-	"     insert into pgorm.orm_action(object_schema,object_name,object_type,action)" "\n" \
-	"       select rec.schema,rec.name,'table','alter'" "\n" \
-	"       union all" "\n" \
-	"       select distinct parent_table_schema,parent_table_name,'table','alter_child' from pgorm.orm_table_fkey where child_table_schema=rec.schema and child_table_name=rec.table_name;" "\n" \
+	"     call pgorm.orm_relation_column_refresh(rec.schema,rec.name);" "\n" \
+	"     insert into pgorm.orm_action(object_schema,object_name,object_type,action) values(rec.schema,rec.name,'relation','alter');" "\n" \
+	"     if rec.type='table' then" "\n" \
+	"       call pgorm.orm_table_fkey_refresh(rec.schema,rec.name);" "\n" \
+	"       insert into pgorm.orm_action(object_schema,object_name,object_type,action)" "\n" \
+	"         select distinct parent_table_schema,parent_table_name,'relation','alter_child'" "\n" \
+	"           from pgorm.orm_table_fkey" "\n" \
+	"           where child_table_schema=rec.schema and child_table_name=rec.name;" "\n" \
+	"     else" "\n" \
+	"     end if;" "\n" \
 	"   end loop;" "\n" \
 	"end; $$"
 
-#define SQL_FUNCTION$EVENT_FN_DROP_OBJECTS \
-	"create or replace function pgorm.event_fn_drop_objects() returns event_trigger language plpgsql security definer as $$" "\n" \
+#define SQL_FUNCTION$EVENT_FN_DROP_RELATION \
+	"create or replace function pgorm.event_fn_drop_relation() returns event_trigger language plpgsql security definer as $$" "\n" \
 	"begin" "\n" \
 	"  insert into pgorm.orm_action(object_schema,object_name,object_type,action,drop_class_name)" "\n" \
 	"    select r.schema,r.name,'relation','drop',r.class_name" "\n" \
@@ -367,11 +371,11 @@
 
 #define SQL_BLOCK$CREATE_TRIGGERS \
 	"do $$ begin" "\n" \
-	"  if not exists (select from pg_event_trigger where evtname='pgorm_event_tg_alter_table') then" "\n" \
-	"    create event trigger pgorm_event_tg_alter_table on ddl_command_end when tag in ('ALTER TABLE','COMMENT') execute procedure pgorm.event_fn_alter_table();" "\n" \
+	"  if not exists (select from pg_event_trigger where evtname='pgorm_event_tg_alter_relation') then" "\n" \
+	"    create event trigger pgorm_event_tg_alter_relation on ddl_command_end when tag in ('ALTER TABLE','COMMENT','CREATE INDEX','CREATE VIEW','ALTER VIEW') execute procedure pgorm.event_fn_alter_relation();" "\n" \
 	"  end if;" "\n" \
-	"  if not exists (select from pg_event_trigger where evtname='pgorm_event_tg_drop_objects') then" "\n" \
-	"    create event trigger pgorm_event_tg_drop_objects on sql_drop when tag in ('DROP TABLE','DROP SCHEMA') execute function pgorm.event_fn_drop_objects();" "\n" \
+	"  if not exists (select from pg_event_trigger where evtname='pgorm_event_tg_drop_relation') then" "\n" \
+	"    create event trigger pgorm_event_tg_drop_relation on sql_drop when tag in ('DROP TABLE','DROP VIEW','DROP SCHEMA') execute function pgorm.event_fn_drop_relation();" "\n" \
 	"  end if;" "\n" \
 	"  if not exists (select from pg_trigger where tgname='pgorm_relation_tg_update') then" "\n" \
 	"    create trigger pgorm_relation_tg_update after update on pgorm.orm_relation for each row execute function pgorm.orm_relation_fn_update();" "\n" \
@@ -407,8 +411,8 @@ const char *SQL_LIST[] = {
 	SQL_FUNCTION$ORM_RELATION_FN_UPDATE,
     SQL_FUNCTION$ORM_RELATION_COLUMN_FN_UPDATE,
 	SQL_FUNCTION$ORM_TABLE_FKEY_FN_UPDATE,
-	SQL_FUNCTION$EVENT_FN_ALTER_TABLE,
-	SQL_FUNCTION$EVENT_FN_DROP_OBJECTS,
+	SQL_FUNCTION$EVENT_FN_ALTER_RELATION,
+	SQL_FUNCTION$EVENT_FN_DROP_RELATION,
 	SQL_BLOCK$CREATE_TRIGGERS
 };
 

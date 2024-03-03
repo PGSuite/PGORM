@@ -114,7 +114,7 @@
     "		});\n" \ 
     "		let valuesPrimaryKey = relation.getColumnsPrimaryKey().map( column => column.pgValue(this.getFieldValue(column)) );\n" \ 
     "		let fieldValues = sendRequest(\"/pgorm/record-save\", { \n" \ 
-    "			\"connectionID\":      connection.getID(), \n" \ 
+    "			\"connection\":        connection, \n" \ 
     "			\"relationSchema\":    relation.getSchema(),\n" \ 
     "			\"relationName\":      relation.getName(),\n" \ 
     "			\"columns\":           relation.getColumnNames(),\n" \ 
@@ -133,7 +133,7 @@
     "		let relation = this.constructor.getRelation();\n" \ 
     "		let valuesPrimaryKey = relation.getColumnsPrimaryKey().map( column => column.pgValue(this.getFieldValue(column)) );\n" \ 
     "		let fieldValues = sendRequest(\"/pgorm/record-delete\", { \n" \ 
-    "			\"connectionID\":      connection.getID(), \n" \ 
+    "			\"connection\":        connection, \n" \ 
     "			\"relationSchema\":    relation.getSchema(),\n" \ 
     "			\"relationName\":      relation.getName(),\n" \ 
     "			\"columns\":           relation.getColumnNames(),\n" \ 
@@ -144,11 +144,11 @@
     "		return this;\n" \ 
     "	}	\n" \ 
     "\n" \ 
-    "	static loadWhere(recordClass, connection, condition, params) {\n" \ 
+    "	static findWhere(recordClass, connection, condition, params) {\n" \ 
     "		validateConnection(connection);\n" \ 
     "		let relation = recordClass.getRelation();\n" \ 
-    "		let fieldValues = sendRequest(\"/pgorm/record-load-where\", { \n" \ 
-    "			\"connectionID\":   connection.getID(), \n" \ 
+    "		let fieldValues = sendRequest(\"/pgorm/record-find\", { \n" \ 
+    "			\"connection\":     connection, \n" \ 
     "			\"relationSchema\": relation.getSchema(),\n" \ 
     "			\"relationName\":   relation.getName(),\n" \ 
     "			\"columns\":        relation.getColumnNames(),\n" \ 
@@ -261,11 +261,11 @@
     "\n" \ 
     "	constructor() { super(); if (this.constructor===RecordArray) throw new Error(\"RecordArray is abstract class\"); }\n" \ 
     "\n" \ 
-    "	static load(recordArrayClass, connection, condition, params) {\n" \ 
+    "	static findWhere(recordArrayClass, connection, condition, params) {\n" \ 
     "		validateConnection(connection);\n" \ 
     "		let relation = recordArrayClass.getRelation();\n" \ 
-    "		let records = sendRequest(\"/pgorm/record-array-load\", { \n" \ 
-    "			\"connectionID\":   connection.getID(), \n" \ 
+    "		let records = sendRequest(\"/pgorm/record-array-find\", { \n" \ 
+    "			\"connection\":     connection, \n" \ 
     "			\"relationSchema\": relation.getSchema(),\n" \ 
     "			\"relationName\":   relation.getName(),\n" \ 
     "			\"columns\":        relation.getColumnNames(),\n" \ 
@@ -279,11 +279,11 @@
     "		return recordArray;\n" \ 
     "	}\n" \ 
     "\n" \ 
-    "	static delete(recordArrayClass, connection, condition, params) {\n" \ 
+    "	static deleteWhere(recordArrayClass, connection, condition, params) {\n" \ 
     "		validateConnection(connection);\n" \ 
     "		let relation = recordArrayClass.getRelation();\n" \ 
     "		return sendRequest(\"/pgorm/record-array-delete\", { \n" \ 
-    "			\"connectionID\": connection.getID(), \n" \ 
+    "			\"connection\":     connection, \n" \ 
     "			\"relationSchema\": relation.getSchema(),\n" \ 
     "			\"relationName\":   relation.getName(),\n" \ 
     "			\"condition\":      condition!==null && condition!==undefined ? condition : \"\",\n" \ 
@@ -376,7 +376,6 @@
     "\n" \ 
     "    static fromJSON(json) {	\n" \ 
     "		if (json===null || json===undefined) return null;\n" \ 
-    "		console.log(\"fromJSON(json) \" + JSON.stringify(json));\n" \ 
     "		let connection = new ORMConnection();\n" \ 
     "		connection.#index = json.index; \n" \ 
     "		connection.#key   = json.key; \n" \ 

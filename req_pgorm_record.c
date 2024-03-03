@@ -122,7 +122,7 @@ int req_pgorm_record_delete(json *req_params, stream *response) {
 	return res;
 }
 
-int req_pgorm_record_load_where(json *req_params, stream *response) {
+int req_pgorm_record_find(json *req_params, stream *response) {
 	if (req_pgorm_response_sucess_begin(response)) return 1;
 	char relation_schema[STR_SIZE];
 	char relation_name[STR_SIZE];
@@ -163,7 +163,7 @@ int req_pgorm_record_load_where(json *req_params, stream *response) {
 	return res;
 }
 
-int req_pgorm_record_array_load(json *req_params, stream *response) {
+int req_pgorm_record_array_find(json *req_params, stream *response) {
 	if (req_pgorm_response_sucess_begin(response)) return 1;
 	char relation_schema[STR_SIZE];
 	char relation_name[STR_SIZE];
@@ -239,4 +239,3 @@ int req_pgorm_record_array_delete(json *req_params, stream *response) {
 	if (stream_add_str(response, "\n}", NULL)) return 1;
 	return 0;
 }
-

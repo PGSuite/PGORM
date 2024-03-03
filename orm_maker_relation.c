@@ -192,6 +192,36 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 		if (stream_add_str(module_base_src, "} \n", NULL)) return 1;
 	}
 	if (stream_add_str(module_base_src, "\n", NULL)) return 1;
+	if (str_copy(line1, sizeof(line1), "throw new ORMError(310, `Relation \"", relation->schema, ".", relation->name, "\" does not have primary key`);", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Save record and get values (SQL statement: insert/update returning)\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    save(connection = ORMConnection.getDefault()) { ", relation->columns_pkey_len>0 ? "return super.save(connection);" : line1, " }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Delete record and get values (SQL statement: delete returning)\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    delete(connection = ORMConnection.getDefault()) { ", relation->columns_pkey_len>0 ? "super.delete(connection);" : line1, " }\n\n", NULL)) return 1;
+	if (relation->columns_pkey_len>0) {
+		line1[0] = 0; line2[0] = 0;
+		for(int i=0; i<relation->columns_pkey_len; i++) {
+			char param[STR_SIZE];
+			if (str_format(param, sizeof(param), "$%d", i+1)) return 1;
+			if (str_add(line1, sizeof(line1), i>0 ? " and " : "", relation->columns[relation->columns_pkey[i]].name, "=", param, NULL)) return 1;
+			if (str_add(line2, sizeof(line2), i>0 ? ", " : "", relation->columns[relation->columns_pkey[i]].field_name, NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "    // Get record by primary key\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    static find(", line2, ", connection = ORMConnection.getDefault()) { return ", relation->class_name, ".findWhere(\"", line1, "\", [", line2, "], connection); }\n\n", NULL)) return 1;
+	}
+	if (stream_add_str(module_base_src, "    // Get one record by condition (SQL statement: select where [condition])\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static findWhere(condition, params = null, connection = ORMConnection.getDefault()) { return Record.loadWhere(", relation->class_name, ", connection, condition, params); }\n\n", NULL)) return 1;
+	for(int i=0; i<relation->indexes_len; i++) {
+		if (!relation->indexes[i].unuque) continue;
+		line1[0] = 0; line2[0] = 0;
+		for(int j=0; j<relation->indexes[i].columns_len; j++) {
+			char variable[256];
+			if (str_format(variable, sizeof(variable), "$%d", j+1)) return 1;
+			if (str_add(line1, sizeof(line1), j>0 ? ", " : "", relation->columns[relation->indexes[i].columns[j]].field_name, NULL)) return 1;
+			if (str_add(line2, sizeof(line2), j>0 ? " and " : "", relation->columns[relation->indexes[i].columns[j]].name, "=", variable, NULL)) return 1;
+		}
+		if (stream_add_str(module_base_src, "    // Get record by unique index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    static findBy",relation->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", relation->class_name, ".findWhere(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
+	}
 	if (relation->parents_len>0) {
 		if (stream_add_str(module_base_src, "    // Parents\n", NULL)) return 1;
 		for(int i=0; i<relation->parents_len; i++) {
@@ -208,7 +238,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			for(int j=0; j<parent->child_fields.len; j++)
 				if (stream_add_str(module_base_src, "        if (this.#", parent->child_fields.values[j], "===null) return null;\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        if (this.#", parent->field_parent_name, "$assigned) return this.#", parent->field_parent_name, ";\n", NULL)) return 1;
-			if (stream_add_str(module_base_src, "        this.#", parent->field_parent_name, " = ", parent->parent_class_name, ".load(", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", parent->field_parent_name, " = ", parent->parent_class_name, ".find(", NULL)) return 1;
 			for(int j=0; j<parent->child_fields.len; j++)
 				if (stream_add_str(module_base_src, j>0 ? ", " : "", "this.#", parent->child_fields.values[j], NULL)) return 1;
 			if (stream_add_str(module_base_src, ", connection);\n", NULL)) return 1;
@@ -248,7 +278,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (stream_add_str(module_base_src, "    get", child->field_child_name, "Array(connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        if (!this.isRecordExists()) throw new ORMError(302, \"Object not saved in database\");\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "        if (this.#", child->field_child_name, "Array$assigned) return this.#", child->field_child_name, "Array;\n", NULL)) return 1;
-			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array = ", child->child_class_name, "Array.load(\"", NULL)) return 1;
+			if (stream_add_str(module_base_src, "        this.#", child->field_child_name, "Array = ", child->child_class_name, "Array.findWhere(\"", NULL)) return 1;
 			for(int j=0; j<child->child_columns.len; j++) {
 				if (stream_add_str(module_base_src, j==0 ? "" : " and ", child->child_columns.values[j], "=$", NULL)) return 1;
 			    if (stream_add_int(module_base_src, j+1)) return 1;
@@ -265,7 +295,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (stream_add_str(module_base_src, "        return this.#", child->field_child_name, "Array;\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
 		}
-		if (stream_add_str(module_base_src, "\n    // Add children\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "\n    // Add child\n", NULL)) return 1;
 		for(int i=0; i<relation->children_len; i++) {
 			metadata_relationship *child = &relation->children[i];
 			if (stream_add_str(module_base_src, "    add", child->field_child_name, "(child, connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
@@ -283,7 +313,7 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (stream_add_str(module_base_src, "        return this;\n", NULL)) return 1;
 			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
 		}
-		if (stream_add_str(module_base_src, "\n    // Delete children\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "\n    // Delete child\n", NULL)) return 1;
 		for(int i=0; i<relation->children_len; i++) {
 			metadata_relationship *child = &relation->children[i];
 			if (stream_add_str(module_base_src, "    delete", child->field_child_name, "(index, connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
@@ -293,39 +323,6 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (stream_add_str(module_base_src, "    }\n", NULL)) return 1;
 		}
 		if (stream_add_str(module_base_src, "\n", NULL)) return 1;
-	}
-	line1[0]=0;
-	if (str_add(line1, sizeof(line1), "throw new ORMError(310, `Relation \"", relation->schema, ".", relation->name, "\" does not have primary key`);", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Save record and get values (SQL statement: insert or update with returning)\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    save(connection = ORMConnection.getDefault()) { ", relation->columns_pkey_len>0 ? "return super.save(connection);" : line1, " }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Delete record and get values (SQL statement: delete with returning)\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    delete(connection = ORMConnection.getDefault()) { ", relation->columns_pkey_len>0 ? "super.delete(connection);" : line1, " }\n\n", NULL)) return 1;
-	if (relation->columns_pkey_len>0) {
-		if (stream_add_str(module_base_src, "    // Load one record by condition (SQL statement: select where [condition])\n", NULL)) return 1;
-		if (stream_add_str(module_base_src, "    static loadWhere(condition, params = null, connection = ORMConnection.getDefault()) { return Record.loadWhere(", relation->class_name, ", connection, condition, params); }\n\n", NULL)) return 1;
-	}
-	if (relation->columns_pkey_len>0) {
-		line1[0] = 0; line2[0] = 0;
-		for(int i=0; i<relation->columns_pkey_len; i++) {
-			char param[STR_SIZE];
-			if (str_format(param, sizeof(param), "$%d", i+1)) return 1;
-			if (str_add(line1, sizeof(line1), i>0 ? " and " : "", relation->columns[relation->columns_pkey[i]].name, "=", param, NULL)) return 1;
-			if (str_add(line2, sizeof(line2), i>0 ? ", " : "", relation->columns[relation->columns_pkey[i]].field_name, NULL)) return 1;
-		}
-		if (stream_add_str(module_base_src, "    // Load record by primary key\n", NULL)) return 1;
-		if (stream_add_str(module_base_src, "    static load(", line2, ", connection = ORMConnection.getDefault()) { return ", relation->class_name, ".loadWhere(\"", line1, "\", [", line2, "], connection); }\n\n", NULL)) return 1;
-	}
-	for(int i=0; i<relation->indexes_len; i++) {
-		if (!relation->indexes[i].unuque) continue;
-		line1[0] = 0; line2[0] = 0;
-		for(int j=0; j<relation->indexes[i].columns_len; j++) {
-			char variable[256];
-			if (str_format(variable, sizeof(variable), "$%d", j+1)) return 1;
-			if (str_add(line1, sizeof(line1), j>0 ? ", " : "", relation->columns[relation->indexes[i].columns[j]].field_name, NULL)) return 1;
-			if (str_add(line2, sizeof(line2), j>0 ? " and " : "", relation->columns[relation->indexes[i].columns[j]].name, "=", variable, NULL)) return 1;
-		}
-		if (stream_add_str(module_base_src, "    // Load record by unique index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
-		if (stream_add_str(module_base_src, "    static loadUnique",relation->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", relation->class_name, ".loadWhere(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
 	}
 	if (stream_add_str(module_base_src, "    // Create from postgres record\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    static fromRecord(pgRecord) { return super.fromRecord(", relation->class_name, ", pgRecord); }\n\n", NULL)) return 1;
@@ -365,12 +362,10 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 	if (stream_add_str(module_base_src, "export class Base", relation->class_name, "Array extends RecordArray {\n\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    // Get relation\n", NULL)) return 1;
 	if (stream_add_str(module_base_src, "    static getRelation() { return Base", relation->class_name, ".getRelation(); }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Load any records by condition (SQL statement: select where [condition])\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // If there is no condition, all records load\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static load(condition = null, params = null, connection = ORMConnection.getDefault()) { return RecordArray.load(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // Delete any records by condition (SQL statement: select where [condition])\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    // If there is no condition, all records deleted\n", NULL)) return 1;
-	if (stream_add_str(module_base_src, "    static delete(condition = null, params = null, connection = ORMConnection.getDefault()) { return RecordArray.delete(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Get any records by condition (SQL statement: select where [condition])\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static findWhere(condition = null, params = null, connection = ORMConnection.getDefault()) { return RecordArray.findWhere(", relation->class_name, "Array, connection, condition, params); }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Get all records\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static findAll(connection = ORMConnection.getDefault()) { return ", relation->class_name, "Array.findWhere(null, null, connection); }\n\n", NULL)) return 1;
 	for(int i=0; i<relation->indexes_len; i++) {
 		if (relation->indexes[i].unuque) continue;
 		line1[0] = 0;
@@ -381,9 +376,16 @@ int orm_maker_relation_module_base(PGconn *pg_conn, stream *module_base_src, met
 			if (str_add(line1, sizeof(line1), j>0 ? ", " : "", relation->columns[relation->indexes[i].columns[j]].field_name, NULL)) return 1;
 			if (str_add(line2, sizeof(line2), j>0 ? " and " : "", relation->columns[relation->indexes[i].columns[j]].name, "=", variable, NULL)) return 1;
 		}
-		if (stream_add_str(module_base_src, "    // Load records by index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
-		if (stream_add_str(module_base_src, "    static loadByIndex",relation->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", relation->class_name, "Array.load(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    // Get records by index \"",relation->indexes[i].name,"\"\n", NULL)) return 1;
+		if (stream_add_str(module_base_src, "    static findBy",relation->indexes[i].id,"(",line1,", connection = ORMConnection.getDefault()) { return ", relation->class_name, "Array.findWhere(\"",line2,"\", [",line1,"], connection); }\n\n", NULL)) return 1;
 	}
+	if (stream_add_str(module_base_src, "    // Delete any records by condition (SQL statement: delete where [condition])\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static deleteWhere(condition, params = null, connection = ORMConnection.getDefault()) {\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "        if (condition===null || condition===undefined || condition==='') throw new ORMError(314, \"Parameter \\\"condition\\\" for deleteWhere method is null or empty\");\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "        return RecordArray.deleteWhere(", relation->class_name, "Array, connection, condition, params);\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    }\n\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    // Delete all records by condition (SQL statement: delete)\n", NULL)) return 1;
+	if (stream_add_str(module_base_src, "    static deleteAll(connection = ORMConnection.getDefault()) { return RecordArray.deleteWhere(", relation->class_name, "Array, connection, null, null); }\n\n", NULL)) return 1;
 	if (relation->sort_field_name_len_max!=-1) {
 		if (stream_add_str(module_base_src, "    // Sort by fields\n", NULL)) return 1;
 		for(i=0; i<relation->columns_len; i++) {

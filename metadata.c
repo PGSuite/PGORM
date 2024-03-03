@@ -31,10 +31,10 @@
 
 #define SQL_INDEXES \
 	"select c.relname,i.indisunique,\n" \
-	"       (select array_agg(attname order by attnum) from pg_attribute where attrelid=c.oid)\n" \
+	"       (select string_agg(attname,',' order by attnum) from pg_attribute where attrelid=c.oid)\n" \
 	"  from pg_index i\n" \
 	"  join pg_class c on c.oid = i.indexrelid\n" \
-	"  where indrelid = $1\n" \
+	"  where indrelid = $1 and not indisprimary\n" \
 	"  order by i.indexrelid"
 
 #define SQL_TABLE_FKEYS \
@@ -184,7 +184,7 @@ int metadata_relation_load(metadata_relation *relation, PGconn *pg_conn, char *s
 		}
 		index->unuque = PQgetvalue(pg_result, i, 1)[0]=='t';
 		str_list columns;
-		if(str_list_split(&columns, PQgetvalue(pg_result, i, 2), 1, PQgetlength(pg_result, i, 2)-2, ',')) {
+		if(str_list_split(&columns, PQgetvalue(pg_result, i, 2), 0, PQgetlength(pg_result, i, 2)-1, ',')) {
 			PQclear(pg_result);
 			return 1;
 		}
@@ -199,7 +199,7 @@ int metadata_relation_load(metadata_relation *relation, PGconn *pg_conn, char *s
 			if (column_ind==-1) break;
 			index->columns[index->columns_len] = column_ind;
 			if (index->columns[index->columns_len]==-1) break;
-			if (str_add(index->id, sizeof(index->id), "$", relation->columns[column_ind].field_name, NULL)) {
+			if (str_add(index->id, sizeof(index->id), index->id[0]!=0 ? "$" : "", relation->columns[column_ind].field_name, NULL)) {
 				PQclear(pg_result);
 				return 1;
 			}

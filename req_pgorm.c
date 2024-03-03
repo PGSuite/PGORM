@@ -173,8 +173,8 @@ int req_pgorm_execute(json *req_params, stream *response) {
 
 extern req_pgorm_record_save();
 extern req_pgorm_record_delete();
-extern req_pgorm_record_load_where();
-extern req_pgorm_record_array_load();
+extern req_pgorm_record_find();
+extern req_pgorm_record_array_find();
 extern req_pgorm_record_array_delete();
 
 int req_pgorm(tcp_socket socket_connection, http_request *request) {
@@ -193,8 +193,8 @@ int req_pgorm(tcp_socket socket_connection, http_request *request) {
 	else if (!strcmp(request->path, "/pgorm/execute"))             req_pgorm_handler = req_pgorm_execute;
 	else if (!strcmp(request->path, "/pgorm/record-save"))         req_pgorm_handler = req_pgorm_record_save;
 	else if (!strcmp(request->path, "/pgorm/record-delete"))       req_pgorm_handler = req_pgorm_record_delete;
-	else if (!strcmp(request->path, "/pgorm/record-load-where"))   req_pgorm_handler = req_pgorm_record_load_where;
-	else if (!strcmp(request->path, "/pgorm/record-array-load"))   req_pgorm_handler = req_pgorm_record_array_load;
+	else if (!strcmp(request->path, "/pgorm/record-find"))         req_pgorm_handler = req_pgorm_record_find;
+	else if (!strcmp(request->path, "/pgorm/record-array-find"))   req_pgorm_handler = req_pgorm_record_array_find;
 	else if (!strcmp(request->path, "/pgorm/record-array-delete")) req_pgorm_handler = req_pgorm_record_array_delete;
 	else {
 		log_error(67, request->path);
