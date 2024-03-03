@@ -35,6 +35,4 @@ For each table, JavaScript module is automatically generated, be used through th
 *   **Autocorrect** - When performing DDL operations on table (alter table, create index, etc.), trigger fires, which updates the JavaScript module
 *   **Table definition (relation)** - Class has static method that returns table definition (relation): schema, name, fields, primary key, relationships
 *   **Simplicity and sufficiency** -  Server sends the modules created by it via HTTP, installation consists in copying the executable file and creation of the service, no third party libraries required (libpq already installed with postgres)
-
-
-<li><b>Table definition (relation)</b> - Class has static method that returns table definition (relation): schema, name, fields, primary key, relationships
+*   **Table definition (relation)** -  Class has static method that returns table definition (relation): schema, name, fields, primary key, relationships
